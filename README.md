@@ -28,13 +28,11 @@ graph TB
         MCP_STDIO[MCP stdio Transport<br/>Claude Desktop]
         MCP_HTTP[MCP HTTP Transport<br/>Streamlit Dashboard]
         MCP_SSE[MCP SSE Transport<br/>Teams Bot & Azure AI]
-    end
-
-    %% MCP Servers (Dual Mode)
+    end    %% MCP Servers (Dual Mode)
     subgraph "MCP Servers (FastMCP + SSE)"
-        RAG[Main RAG Server<br/>HTTP: Port 8000 | SSE: Port 8003<br/>6 Tools + Chat History]
-        SEARCH[Web Search Server<br/>HTTP: Port 8001 | SSE: Port 8004<br/>4 Tools + News]
-        COMMENTS[Comments Server<br/>HTTP: Port 8002 | SSE: Port 8005<br/>7 Tools + Analytics]
+        RAG[Main RAG Server<br/>HTTP Port 8000 - SSE Port 8003<br/>6 Tools + Chat History]
+        SEARCH[Web Search Server<br/>HTTP Port 8001 - SSE Port 8004<br/>4 Tools + News]
+        COMMENTS[Comments Server<br/>HTTP Port 8002 - SSE Port 8005<br/>7 Tools + Analytics]
     end
 
     %% Azure Services
