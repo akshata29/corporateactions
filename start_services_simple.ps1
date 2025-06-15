@@ -2,6 +2,10 @@
 # Opens each command in a new PowerShell window
 
 $RepoRoot = Get-Location
+# stdio MCP Servers
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$RepoRoot\mcp-server'; py main.py"
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$RepoRoot\mcp-websearch'; py main.py"
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$RepoRoot\mcp-comments'; py main.py"
 
 # HTTP MCP Servers
 Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$RepoRoot\mcp-server'; py main.py --port 8000"

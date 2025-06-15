@@ -13,6 +13,12 @@ import platform
 from datetime import datetime, date
 from typing import List, Dict, Any, Optional, Set
 import uuid
+from dotenv import load_dotenv
+
+# Load environment variables
+script_dir = os.path.dirname(os.path.abspath(__file__))
+env_path = os.path.join(script_dir, ".env")
+load_dotenv(env_path, override=True)
 
 # MCP imports
 from fastmcp import FastMCP

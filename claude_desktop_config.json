@@ -1,0 +1,34 @@
+{
+  "mcpServers": {
+    "corporate-actions-rag": {
+      "command": "C:\\Users\\astalati\\AppData\\Local\\Programs\\Python\\Python311\\python.exe",
+      "args": [
+        "d:\\repos\\corporateactions\\mcp-server\\main.py"
+      ],
+      "env": {
+        "PYTHONPATH": "C:\\Users\\astalati\\AppData\\Roaming\\Python\\Python311\\site-packages;C:\\Users\\astalati\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages",
+        "PYTHONUNBUFFERED": "1"
+      }
+    },
+    "corporate-actions-websearch": {
+      "command": "C:\\Users\\astalati\\AppData\\Local\\Programs\\Python\\Python311\\python.exe",
+      "args": [
+        "d:\\repos\\corporateactions\\mcp-websearch\\main.py"
+      ],
+      "env": {
+        "PYTHONPATH": "C:\\Users\\astalati\\AppData\\Roaming\\Python\\Python311\\site-packages;C:\\Users\\astalati\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages",
+        "PYTHONUNBUFFERED": "1"
+      }
+    },
+    "corporate-actions-comments": {
+      "command": "C:\\Users\\astalati\\AppData\\Local\\Programs\\Python\\Python311\\python.exe",
+      "args": [
+        "d:\\repos\\corporateactions\\mcp-comments\\main.py"
+      ],
+      "env": {
+        "PYTHONPATH": "C:\\Users\\astalati\\AppData\\Roaming\\Python\\Python311\\site-packages;C:\\Users\\astalati\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages",
+        "PYTHONUNBUFFERED": "1"
+      }
+    }
+  }
+}

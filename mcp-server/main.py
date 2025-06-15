@@ -32,7 +32,10 @@ from openai import AsyncAzureOpenAI
 from azure.identity import DefaultAzureCredential, ClientSecretCredential
 
 # Load environment variables
-load_dotenv(".env", override=True)
+import os
+script_dir = os.path.dirname(os.path.abspath(__file__))
+env_path = os.path.join(script_dir, ".env")
+load_dotenv(env_path, override=True)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

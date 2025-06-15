@@ -14,6 +14,12 @@ from datetime import datetime
 from typing import List, Dict, Any, Optional
 from urllib.parse import quote_plus
 import httpx
+from dotenv import load_dotenv
+
+# Load environment variables
+script_dir = os.path.dirname(os.path.abspath(__file__))
+env_path = os.path.join(script_dir, ".env")
+load_dotenv(env_path, override=True)
 
 # MCP imports
 from fastmcp import FastMCP
