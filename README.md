@@ -14,7 +14,8 @@ A collaborative data sharing platform for corporate actions that enables real-ti
 ## 🏗️ Architecture Overview
 
 ```mermaid
-graph TB    %% Client Layer
+graph TB    
+    %% Client Layer
     subgraph "Client Applications"
         UI[Streamlit Dashboard<br/>Enhanced Visualizations]
         AZURE_UI[Azure AI Streamlit<br/>Agent Service Integration]
