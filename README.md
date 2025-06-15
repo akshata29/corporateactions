@@ -18,22 +18,23 @@ graph TB
     %% Client Layer
     subgraph "Client Applications"
         UI[Streamlit Dashboard<br/>Enhanced Visualizations]
-        TEAMS[Microsoft Teams Bot<br/>Proactive Notifications]
+        AZURE_UI[Azure AI Streamlit<br/>Agent Service Integration]
+        TEAMS[Microsoft Teams Bot<br/>MCP SSE Integration]
         CLAUDE[Claude Desktop<br/>MCP Integration]
     end
 
     %% MCP Protocol Layer
     subgraph "MCP Protocol Layer"
-        MCP_STDIO[MCP stdio Transport]
-        MCP_HTTP[MCP HTTP Transport]
-        MCP_SSE[MCP SSE Transport]
+        MCP_STDIO[MCP stdio Transport<br/>Claude Desktop]
+        MCP_HTTP[MCP HTTP Transport<br/>Streamlit Dashboard]
+        MCP_SSE[MCP SSE Transport<br/>Teams Bot & Azure AI]
     end
 
-    %% MCP Servers
-    subgraph "MCP Servers (FastMCP)"
-        RAG[Main RAG Server<br/>Port 8000<br/>6 Tools + Chat History]
-        SEARCH[Web Search Server<br/>Port 8001<br/>4 Tools + News]
-        COMMENTS[Comments Server<br/>Port 8002<br/>7 Tools + Analytics]
+    %% MCP Servers (Dual Mode)
+    subgraph "MCP Servers (FastMCP + SSE)"
+        RAG[Main RAG Server<br/>HTTP: Port 8000 | SSE: Port 8003<br/>6 Tools + Chat History]
+        SEARCH[Web Search Server<br/>HTTP: Port 8001 | SSE: Port 8004<br/>4 Tools + News]
+        COMMENTS[Comments Server<br/>HTTP: Port 8002 | SSE: Port 8005<br/>7 Tools + Analytics]
     end
 
     %% Azure Services
@@ -41,7 +42,7 @@ graph TB
         AOAI[Azure OpenAI<br/>GPT-4 + Embeddings<br/>Chat History Support]
         AISEARCH[Azure AI Search<br/>Vector Database<br/>Corporate Actions Index]
         COSMOS[Azure Cosmos DB<br/>Events + Comments<br/>Real-time Updates]
-        BOT[Azure Bot Service<br/>Teams Integration]
+        AZURE_AI[Azure AI Agent Service<br/>MCP Tool Integration]
         BING[Bing Search API<br/>Financial News]
     end
 
@@ -52,16 +53,28 @@ graph TB
         INSIGHTS[Color-coded Insights<br/>Status Indicators]
     end
 
-    %% Connections
+    %% Client to Transport Connections
     UI --> MCP_HTTP
-    TEAMS --> MCP_HTTP
+    AZURE_UI --> MCP_HTTP
+    TEAMS --> MCP_SSE
     CLAUDE --> MCP_STDIO
     
+    %% Transport to Server Connections
     MCP_HTTP --> RAG
     MCP_HTTP --> SEARCH
     MCP_HTTP --> COMMENTS
+    MCP_SSE --> RAG
+    MCP_SSE --> SEARCH
+    MCP_SSE --> COMMENTS
     MCP_STDIO --> RAG
     
+    %% Azure AI Integration
+    AZURE_UI --> AZURE_AI
+    AZURE_AI --> RAG
+    AZURE_AI --> SEARCH
+    AZURE_AI --> COMMENTS
+    
+    %% Server to Azure Service Connections
     RAG --> AOAI
     RAG --> AISEARCH
     RAG --> COSMOS
@@ -73,22 +86,19 @@ graph TB
     COMMENTS --> COSMOS
     COMMENTS --> INSIGHTS
     
-    TEAMS --> BOT
-    
+    %% Data Connections
     SAMPLE --> AISEARCH
-    SAMPLE --> COSMOS
-
-    %% Styling
+    SAMPLE --> COSMOS    %% Styling
     classDef clientClass fill:#e1f5fe,stroke:#01579b,stroke-width:2px
     classDef mcpClass fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
     classDef serverClass fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px
     classDef azureClass fill:#fff3e0,stroke:#e65100,stroke-width:2px
     classDef dataClass fill:#fce4ec,stroke:#880e4f,stroke-width:2px
 
-    class UI,TEAMS,CLAUDE clientClass
+    class UI,AZURE_UI,TEAMS,CLAUDE clientClass
     class MCP_STDIO,MCP_HTTP,MCP_SSE mcpClass
     class RAG,SEARCH,COMMENTS serverClass
-    class AOAI,AISEARCH,COSMOS,BOT,BING azureClass
+    class AOAI,AISEARCH,COSMOS,AZURE_AI,BING azureClass
     class SAMPLE,CHARTS,INSIGHTS dataClass
 ```
 
@@ -164,7 +174,8 @@ This POC leverages Azure Services and the Model Context Protocol to build an Age
 - **Azure OpenAI**: LLM for natural language processing and response generation
 - **Azure AI Search**: Vector database for RAG implementation
 - **Azure Cosmos DB**: Transactional data storage for events and comments
-- **Azure Bot Service**: Microsoft Teams integration
+- **Azure AI Agent Service**: Intelligent agent orchestration with MCP tool integration
+- **Bing Search API**: Web search and financial news aggregation
 
 ### MCP Servers (Model Context Protocol Compliant) ✅
 
@@ -207,6 +218,7 @@ This POC leverages Azure Services and the Model Context Protocol to build an Age
    - **Dynamic Visualization Dashboard** with real-time chart generation
    - **Advanced RAG Assistant** with chat history and context awareness
    - **Interactive Search Interface** with color-coded results and insights
+   - **MCP HTTP Transport**: Direct connection to MCP servers (ports 8000-8002)
    - **Enhanced Features**:
      - 📊 Real-time chart generation (pie, bar, timeline, summary dashboards)
      - 🎨 Color-coded status indicators and visual insights
@@ -214,8 +226,26 @@ This POC leverages Azure Services and the Model Context Protocol to build an Age
      - 🔍 Advanced search with visualization suggestions
      - 📋 Data structure normalization for seamless Azure integration
 
-2. **Microsoft Teams Bot** - *Port 3978* 🤖
+2. **Azure AI Streamlit UI** - *Port 8502* 🤖
+   - **Azure AI Agent Service Integration** with MCP tool discovery
+   - **Intelligent Tool Orchestration** with automatic MCP tool registration
+   - **Advanced Analytics Dashboard** with AI-generated insights
+   - **MCP HTTP Transport**: Azure AI Agent manages MCP tool calls
+   - **Enhanced Features**:
+     - 🧠 AI-powered query processing and tool selection
+     - 📊 Dynamic visualization generation based on AI analysis
+     - 💬 Conversational interface with context awareness
+     - 🔧 Real-time MCP tool discovery and registration
+
+3. **Microsoft Teams Bot** - *Port 3978* 🚀
    - **Proactive Notifications** (market open/close alerts)
+   - **MCP SSE Integration** using Server-Sent Events transport (ports 8003-8005)
+   - **Real-time Data Streaming** with enhanced responsiveness
+   - **Enhanced Features**:
+     - 🌊 SSE endpoints for low-latency communication
+     - 📱 Native Teams integration without Azure Bot Service dependency
+     - 🔔 Intelligent notification service with market event triggers
+     - 💬 Natural language processing with MCP-powered RAG
    - **MCP-powered Natural Language** queries with visualization support
    - **Subscription Management** for symbols and events
 
@@ -288,27 +318,47 @@ This POC leverages Azure Services and the Model Context Protocol to build an Age
    python test_mcp_servers.py
    ```
 
-6. **Start all MCP servers**
+6. **Start all MCP servers (choose mode)**
    ```bash
+   # Start in MCP HTTP mode (for Streamlit UIs and Claude Desktop)
    python start_mcp_servers.py
+   
+   # OR start in SSE mode (for Teams Bot)
+   python start_mcp_servers.py --sse
    ```
 
 ### Alternative: Start Individual Servers
 
-You can start each MCP server individually using FastMCP:
+You can start each MCP server individually in either mode:
 
+#### MCP HTTP Mode (Ports 8000-8002)
 ```bash
-# Main RAG server
+# Main RAG server (MCP HTTP)
 cd mcp-server
-python -m fastmcp run main.py --port 8000
+python main.py --port 8000
 
-# Web search server
+# Web search server (MCP HTTP)
 cd mcp-websearch  
-python -m fastmcp run main.py --port 8001
+python main.py --port 8001
 
-# Comments server
+# Comments server (MCP HTTP)
 cd mcp-comments
-python -m fastmcp run main.py --port 8002
+python main.py --port 8002
+```
+
+#### SSE Mode (Ports 8003-8005)
+```bash
+# Main RAG server (SSE)
+cd mcp-server
+python main.py --sse --port 8003
+
+# Web search server (SSE)
+cd mcp-websearch  
+python main.py --sse --port 8004
+
+# Comments server (SSE)
+cd mcp-comments
+python main.py --sse --port 8005
 ```
 
 ## 🛠️ Enhanced MCP Tools & Capabilities
@@ -512,13 +562,13 @@ See `data-models/corporate_action_schemas.py` for complete schemas.
 ```
 corporateactions/
 ├── mcp-server/                    # Enhanced RAG MCP server ⭐
-│   ├── main.py                   # FastMCP with advanced RAG + visualizations
+│   ├── main.py                   # FastMCP with advanced RAG + visualizations + SSE
 │   └── requirements.txt          # MCP + Azure + ML dependencies
 ├── mcp-websearch/                # Enhanced web search MCP server 🌐
-│   ├── main.py                   # FastMCP with intelligent search tools
+│   ├── main.py                   # FastMCP with intelligent search tools + SSE
 │   └── requirements.txt          # MCP + search + analytics dependencies  
 ├── mcp-comments/                 # Enhanced collaboration MCP server 💬
-│   ├── main.py                   # FastMCP with advanced collaboration tools
+│   ├── main.py                   # FastMCP with advanced collaboration tools + SSE
 │   └── requirements.txt          # MCP + storage + analytics dependencies
 ├── data-models/                  # Shared data schemas & normalization 📊
 │   ├── corporate_action_schemas.py # Enhanced schemas with visualization support
@@ -528,30 +578,49 @@ corporateactions/
 │   │   ├── app_mcp.py          # Enhanced MCP client with chat history + viz
 │   │   ├── app.py              # Legacy dashboard (maintained for reference)
 │   │   └── requirements.txt    # Streamlit + Plotly + visualization libs
-│   └── teams-bot/              # Microsoft Teams integration 🤖
-│       ├── bot.py              # Teams bot with MCP integration
+│   ├── streamlit-azure-ai/      # Azure AI Agent Service integration 🤖
+│   │   ├── app.py              # Azure AI Agent with MCP tool discovery
+│   │   ├── azure_mcp_tools.py  # MCP tool registry and execution
+│   │   ├── start-azure-ai-app.ps1 # PowerShell startup script
+│   │   ├── test_azure_ai_agent.py # Azure AI Agent testing
+│   │   └── requirements.txt    # Azure AI + MCP dependencies
+│   ├── corporate-actions-agent/ # Enhanced Teams bot with MCP SSE integration 🚀
+│   │   ├── src/
+│   │   │   ├── bot.ts          # Teams bot with MCP SSE integration
+│   │   │   ├── index.ts        # Application entry point
+│   │   │   └── services/
+│   │   │       ├── mcpClientManager.ts # SSE client manager
+│   │   │       ├── notificationService.ts # Proactive notifications
+│   │   │       └── adaptiveCards.ts # Teams card formatting
+│   │   ├── appPackage/         # Teams app manifest and assets
+│   │   ├── package.json        # Node.js dependencies
+│   │   ├── INTEGRATION_STATUS.md # Current integration status
+│   │   └── README.md           # Teams bot documentation
+│   └── teams-bot/              # Alternative Python Teams bot (legacy) 
+│       ├── bot.py              # Python Teams bot with MCP stdio
 │       ├── manifest.json       # Teams app manifest
 │       └── requirements.txt    # Bot framework + MCP dependencies
 ├── scripts/                     # Enhanced utility scripts 🔧
 │   ├── data_ingestion.py       # Azure data setup with Windows compatibility
 │   ├── deploy_azure.ps1        # Azure deployment automation
 │   ├── start_services.ps1      # Windows service startup scripts
-│   ├── test_setup.py           # Environment testing with enhanced checks
 │   └── requirements.txt        # Script dependencies
-├── start_mcp_servers.py         # Enhanced multi-server startup script
-├── test_mcp_servers.py          # Comprehensive MCP testing suite
+├── start_mcp_servers.py         # Enhanced multi-server startup script (dual mode)
+├── start_all_services.ps1       # PowerShell service orchestration
+├── manual_start_commands.ps1    # Manual server startup commands
 ├── requirements.txt             # Root dependencies
 └── README.md                    # This enhanced documentation
 ```
 
 ### Key Enhancements by Directory 🎯
 
-#### `/mcp-server/` - Advanced RAG Capabilities
+#### `/mcp-server/` - Advanced RAG Capabilities + SSE Support
 - ✅ **Chat History Integration**: Context-aware conversations
 - ✅ **Dynamic Visualization Detection**: Smart chart generation triggers
 - ✅ **Multi-modal Responses**: Text + interactive visualizations
 - ✅ **Data Normalization**: Seamless field mapping and compatibility
 - ✅ **Windows Compatibility**: DNS and event loop fixes
+- ✅ **Dual Transport Mode**: Both MCP HTTP (port 8000) and SSE (port 8003)
 
 #### `/clients/streamlit-ui/` - Enhanced Dashboard
 - ✅ **Real-time Chart Generation**: Plotly-based dynamic visualizations
@@ -559,12 +628,30 @@ corporateactions/
 - ✅ **Interactive Search Interface**: Enhanced filtering with visual results
 - ✅ **Chat History UI**: Conversation context and regeneration capabilities
 - ✅ **Responsive Design**: Adaptive layouts for different screen sizes
+- ✅ **MCP HTTP Integration**: Direct connection to MCP servers
 
-#### `/mcp-comments/` - Advanced Collaboration
+#### `/clients/streamlit-azure-ai/` - Azure AI Agent Service
+- ✅ **Azure AI Agent Integration**: Intelligent tool orchestration
+- ✅ **Dynamic MCP Tool Discovery**: Automatic tool registration
+- ✅ **AI-Powered Insights**: Smart analysis and recommendations
+- ✅ **PowerShell Automation**: Enhanced startup and monitoring scripts
+- ✅ **Field Normalization Fixes**: Resolved "Unknown Company" issues
+- ✅ **Date Parsing Improvements**: Fixed analytics visualization errors
+
+#### `/clients/corporate-actions-agent/` - Teams Bot with SSE
+- ✅ **TypeScript Implementation**: Modern, type-safe development
+- ✅ **MCP SSE Integration**: Low-latency Server-Sent Events transport
+- ✅ **Proactive Notifications**: Market event triggers and alerts
+- ✅ **Advanced Card Formatting**: Rich Teams adaptive cards
+- ✅ **No Azure Bot Service Dependency**: Direct Teams integration
+- ✅ **Real-time Data Streaming**: Enhanced responsiveness
+
+#### `/mcp-comments/` - Advanced Collaboration + SSE
 - ✅ **Enhanced Analytics**: Trend analysis and engagement metrics
 - ✅ **Real-time Updates**: Live collaboration features
 - ✅ **Intelligent Categorization**: Smart comment classification
 - ✅ **Resolution Tracking**: Workflow management for Q&A
+- ✅ **SSE Endpoints**: Real-time comment streaming
 
 #### `/data-models/` - Enhanced Data Handling
 - ✅ **Schema Flexibility**: Support for multiple data structure variants
@@ -732,25 +819,54 @@ for response in test_responses:
 
 ## 🚀 Enhanced Deployment Guide
 
-### Local Development (Enhanced Experience)
+### Local Development (Windows PowerShell) 🪟
+
+#### Option 1: Automated Startup (Recommended)
 ```powershell
-# 1. Start all enhanced MCP servers
-python start_mcp_servers.py
+# Start all services with automated orchestration
+.\start_all_services.ps1
 
-# 2. Launch enhanced Streamlit dashboard with dynamic visualizations
-cd clients/streamlit-ui
-streamlit run app_mcp.py --server.port 8503
-
-# 3. Configure Teams bot with MCP integration (optional)
-cd ../teams-bot
-# Follow Teams bot setup guide in bot.py
+# This will start:
+# - All MCP servers in appropriate mode
+# - Streamlit UI applications
+# - Optional Teams bot
 ```
 
-### Quick Start Commands
+#### Option 2: Manual Startup with PowerShell Scripts
+```powershell
+# 1. Start MCP servers (choose transport mode)
+python start_mcp_servers.py          # MCP HTTP mode (ports 8000-8002)
+# OR
+python start_mcp_servers.py --sse     # SSE mode (ports 8003-8005)
+
+# 2. Start Streamlit applications
+cd clients/streamlit-ui
+streamlit run app_mcp.py --server.port 8501
+
+# Start Azure AI Streamlit application
+cd ../streamlit-azure-ai
+.\start-azure-ai-app.ps1 --Port 8502
+
+# 3. Start Teams bot (optional)
+cd ../corporate-actions-agent
+npm run dev
+```
+
+#### Option 3: Individual Commands (Development)
+```powershell
+# Use pre-defined manual commands
+.\manual_start_commands.ps1
+
+# This shows all individual startup commands for each service
+# Copy and run them in separate PowerShell windows
+```
+
+### Quick Start Commands (Windows)
 ```powershell
 # Install all dependencies
 pip install -r requirements.txt
 pip install -r clients/streamlit-ui/requirements.txt
+pip install -r clients/streamlit-azure-ai/requirements.txt
 
 # Set up environment with Azure credentials
 copy .env.example .env
@@ -759,9 +875,24 @@ copy .env.example .env
 # Test enhanced capabilities
 python test_mcp_servers.py
 
-# Start everything
-python start_mcp_servers.py & streamlit run clients/streamlit-ui/app_mcp.py
+# Start everything with automation
+.\start_all_services.ps1
+
+# OR start manually in order:
+python start_mcp_servers.py
+cd clients/streamlit-ui ; streamlit run app_mcp.py --server.port 8501
+cd ../streamlit-azure-ai ; .\start-azure-ai-app.ps1
 ```
+
+### Service URLs (After Startup)
+- **🏠 Streamlit Dashboard**: http://localhost:8501
+- **🤖 Azure AI Dashboard**: http://localhost:8502  
+- **📡 MCP RAG Server**: http://localhost:8000/mcp
+- **🔍 MCP Web Search**: http://localhost:8001/mcp
+- **💬 MCP Comments**: http://localhost:8002/mcp
+- **🌊 SSE RAG Server**: http://localhost:8003/health
+- **🌊 SSE Web Search**: http://localhost:8004/health
+- **🌊 SSE Comments**: http://localhost:8005/health
 
 ### Azure Deployment (Production Ready)
 ```powershell
@@ -777,23 +908,42 @@ python scripts/data_ingestion.py
 ```
 
 ### Deployment Validation Checklist ✅
-- [ ] All 3 MCP servers running and responsive
+- [ ] All 3 MCP servers running in both HTTP and SSE modes
 - [ ] Azure OpenAI GPT-4 deployment active
 - [ ] Azure AI Search index populated with corporate actions
 - [ ] Azure Cosmos DB containers created (events, comments)
-- [ ] Streamlit UI accessible with dynamic visualizations
+- [ ] Enhanced Streamlit UI accessible with dynamic visualizations (port 8501)
+- [ ] Azure AI Streamlit UI accessible with agent integration (port 8502)
+- [ ] Teams bot responding with MCP SSE integration (port 3978)
 - [ ] Chat history and context awareness working
 - [ ] Dynamic chart generation functional
 - [ ] Color-coded dashboards displaying correctly
-- [ ] Windows compatibility validated (if applicable)
+- [ ] Field normalization fixes working (no "Unknown Company" issues)
+- [ ] Date parsing improvements functional (no analytics errors)
+- [ ] Windows PowerShell automation scripts working
+- [ ] MCP tool discovery and registration working in Azure AI Agent
 
 ## 📝 Enhanced API Documentation & Examples
 
-### Interactive API Documentation
-Each enhanced MCP server provides comprehensive documentation:
-- **Main RAG Server**: http://localhost:8000/docs *(Enhanced with visualization endpoints)*
-- **Web Search Server**: http://localhost:8001/docs *(Enhanced with analytics)*  
-- **Comments Server**: http://localhost:8002/docs *(Enhanced with collaboration features)*
+### Interactive API Documentation & Health Endpoints
+
+#### MCP HTTP Servers (Ports 8000-8002)
+- **Main RAG Server**: http://localhost:8000/mcp *(MCP protocol endpoint)*
+- **Web Search Server**: http://localhost:8001/mcp *(MCP protocol endpoint)*  
+- **Comments Server**: http://localhost:8002/mcp *(MCP protocol endpoint)*
+
+#### SSE Servers (Ports 8003-8005) - For Teams Bot Integration
+- **RAG Server Health**: http://localhost:8003/health
+- **RAG Query**: `GET http://localhost:8003/rag-query?query=<query>`
+- **Search Health**: http://localhost:8004/health  
+- **Web Search**: `GET http://localhost:8004/web-search?query=<query>`
+- **Comments Health**: http://localhost:8005/health
+- **Event Comments**: `GET http://localhost:8005/event-comments/<event_id>`
+
+#### Azure AI Agent Service Integration
+- **Tool Discovery**: Automatic MCP tool registration
+- **Intelligent Orchestration**: Context-aware tool selection
+- **Enhanced Analytics**: AI-powered insights and visualization suggestions
 
 ### Example Queries & Expected Responses
 
@@ -847,20 +997,25 @@ Each enhanced MCP server provides comprehensive documentation:
 - ✅ **Phase 2** (Completed): Basic MCP tools → Enhanced capabilities  
 - ✅ **Phase 3** (Completed): Static responses → Dynamic visualizations
 - ✅ **Phase 4** (Completed): Simple queries → Context-aware conversations
-- ✅ **Phase 5** (Current): Advanced analytics and real-time collaboration
+- ✅ **Phase 5** (Completed): Dual transport architecture (MCP HTTP + SSE)
+- ✅ **Phase 6** (Current): Azure AI Agent Service integration with MCP tool discovery
 
 ### Recent Major Enhancements 🎯
-- ✅ **Dynamic Visualization Engine**: Real-time chart generation based on natural language queries
-- ✅ **Chat History Integration**: Context-aware conversations spanning multiple interactions  
-- ✅ **Advanced Data Normalization**: Seamless handling of different Azure data structures
-- ✅ **Enhanced Dashboard Experience**: Color-coded insights and interactive visualizations
-- ✅ **Cross-Platform Compatibility**: Windows DNS fixes and robust error handling
-- ✅ **Intelligent Query Processing**: Smart detection of visualization requests and data analysis needs
+- ✅ **Dual Transport Architecture**: MCP HTTP + SSE modes for different client needs
+- ✅ **Azure AI Agent Service Integration**: Intelligent MCP tool orchestration
+- ✅ **Teams Bot SSE Integration**: Low-latency Server-Sent Events transport
+- ✅ **PowerShell Automation**: Windows-native startup and monitoring scripts
+- ✅ **Field Normalization Fixes**: Resolved "Unknown Company" display issues
+- ✅ **Date Parsing Improvements**: Fixed ValueError crashes in analytics
+- ✅ **Enhanced MCP Response Parsing**: Better JSON handling and fallback mechanisms
+- ✅ **TypeScript Teams Bot**: Modern, type-safe Teams integration
 
 ### Technical Benefits Achieved 🚀
-- **🎨 Visual Intelligence**: Automatic chart generation from conversational queries
-- **🧠 Context Awareness**: Maintains conversation history for better user experience  
-- **🔧 Platform Flexibility**: Works seamlessly across Windows, macOS, Linux
-- **📊 Data Intelligence**: Smart field mapping and structure normalization
-- **⚡ Performance**: Optimized for real-time interaction and visualization rendering
-- **🔌 MCP Compatibility**: Works with Claude Desktop, VS Code, and custom clients
+- **🌊 Transport Flexibility**: Choose between MCP HTTP or SSE based on client needs
+- **🤖 AI Orchestration**: Azure AI Agent Service manages complex tool interactions
+- **📱 Native Teams Integration**: Direct Teams bot without Azure Bot Service dependency
+- **🪟 Windows-First Development**: PowerShell scripts and Windows compatibility
+- **🔧 Enhanced Reliability**: Robust error handling and graceful fallbacks
+- **📊 Data Quality**: Field normalization and date parsing improvements
+- **⚡ Performance**: SSE transport for real-time responsiveness
+- **🎯 Developer Experience**: TypeScript, automated testing, comprehensive documentation
