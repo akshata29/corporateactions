@@ -14,14 +14,15 @@ A collaborative data sharing platform for corporate actions that enables real-ti
 ## 🏗️ Architecture Overview
 
 ```mermaid
-graph TB
-    %% Client Layer
+graph TB    %% Client Layer
     subgraph "Client Applications"
         UI[Streamlit Dashboard<br/>Enhanced Visualizations]
         AZURE_UI[Azure AI Streamlit<br/>Agent Service Integration]
         TEAMS[Microsoft Teams Bot<br/>MCP SSE Integration]
         CLAUDE[Claude Desktop<br/>MCP Integration]
-    end    %% MCP Protocol Layer
+    end
+
+    %% MCP Protocol Layer
     subgraph "MCP Protocol Layer"
         MCP_STDIO[MCP stdio Transport<br/>Claude Desktop]
         MCP_HTTP[MCP HTTP Transport<br/>Streamlit Dashboard]
@@ -83,10 +84,11 @@ graph TB
     
     COMMENTS --> COSMOS
     COMMENTS --> INSIGHTS
-    
-    %% Data Connections
+      %% Data Connections
     SAMPLE --> AISEARCH
-    SAMPLE --> COSMOS    %% Styling
+    SAMPLE --> COSMOS
+
+    %% Styling
     classDef clientClass fill:#e1f5fe,stroke:#01579b,stroke-width:2px
     classDef mcpClass fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
     classDef serverClass fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px
