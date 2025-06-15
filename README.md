@@ -21,14 +21,14 @@ graph TB
         AZURE_UI[Azure AI Streamlit<br/>Agent Service Integration]
         TEAMS[Microsoft Teams Bot<br/>MCP SSE Integration]
         CLAUDE[Claude Desktop<br/>MCP Integration]
-    end
-
-    %% MCP Protocol Layer
+    end    %% MCP Protocol Layer
     subgraph "MCP Protocol Layer"
         MCP_STDIO[MCP stdio Transport<br/>Claude Desktop]
         MCP_HTTP[MCP HTTP Transport<br/>Streamlit Dashboard]
         MCP_SSE[MCP SSE Transport<br/>Teams Bot & Azure AI]
-    end    %% MCP Servers (Dual Mode)
+    end
+
+    %% MCP Servers (Dual Mode)
     subgraph "MCP Servers (FastMCP + SSE)"
         RAG[Main RAG Server<br/>HTTP Port 8000 - SSE Port 8003<br/>6 Tools + Chat History]
         SEARCH[Web Search Server<br/>HTTP Port 8001 - SSE Port 8004<br/>4 Tools + News]
