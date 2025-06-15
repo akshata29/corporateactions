@@ -1,0 +1,39 @@
+{
+  "name": "corporate-actions-agent",
+  "version": "0.0.0",
+  "license": "MIT",
+  "private": true,
+  "main": "dist/index",
+  "types": "dist/index",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "clean": "npx rimraf ./dist",
+    "build": "npx tsup",
+    "start": "node .",
+    "dev": "npx nodemon -w \"./src/**\" -e ts --exec \"node -r ts-node/register -r dotenv/config ./src/index.ts\""
+  },
+  "dependencies": {
+    "@microsoft/teams.api": "preview",
+    "@microsoft/teams.apps": "preview",
+    "@microsoft/teams.cards": "preview",
+    "@microsoft/teams.common": "preview",
+    "@microsoft/teams.dev": "preview",
+    "@microsoft/teams.graph": "preview",
+    "axios": "^1.6.7",
+    "date-fns": "^3.3.1",
+    "node-schedule": "^2.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.5.4",
+    "@types/node-schedule": "^2.1.7",
+    "dotenv": "^16.4.5",
+    "nodemon": "^3.1.4",
+    "rimraf": "^6.0.1",
+    "ts-node": "^10.9.2",
+    "tsup": "^8.4.0",
+    "typescript": "^5.4.5"
+  }
+}

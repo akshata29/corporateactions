@@ -2,7 +2,7 @@
 """
 Web Search MCP Server
 Provides web search capabilities for corporate actions research
-Following Model Context Protocol specification
+Following Model Context Protocol specification with SSE support
 """
 
 import asyncio
@@ -17,6 +17,12 @@ import httpx
 
 # MCP imports
 from fastmcp import FastMCP
+
+# FastAPI imports for SSE support
+from fastapi import FastAPI, Response
+from fastapi.responses import StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
+import uvicorn
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -407,7 +413,6 @@ async def get_search_health() -> str:
         else:
             health_status["http_client"] = "not_initialized"
             await initialize_http_client()
-        
         return json.dumps(health_status, indent=2, default=str)
         
     except Exception as e:
@@ -420,6 +425,70 @@ async def get_search_health() -> str:
         })
 
 # =============================================================================
+# SSE (Server-Sent Events) Support for Teams Bot Integration
+# =============================================================================
+
+# Create FastAPI app for SSE endpoints
+sse_app = FastAPI(title="Web Search SSE API", version="1.0.0")
+
+# Add CORS middleware for Teams bot integration
+sse_app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Configure appropriately for production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@sse_app.get("/health")
+async def sse_health():
+    """Health check endpoint for SSE API"""
+    return {"status": "healthy", "service": "Web Search SSE API"}
+
+@sse_app.get("/web-search")
+async def sse_web_search(
+    query: str,
+    max_results: int = 10,
+    search_type: str = "general",
+    date_filter: str = ""
+):
+    """Web search endpoint for Teams bot"""
+    try:
+        result = await web_search(query, max_results, search_type, date_filter)
+        return Response(content=result, media_type="application/json")
+    except Exception as e:
+        logger.error(f"SSE web search error: {e}")
+        return {"error": str(e)}
+
+@sse_app.get("/news-search")
+async def sse_news_search(
+    query: str,
+    max_results: int = 10,
+    freshness: str = "week"
+):
+    """News search endpoint for Teams bot"""
+    try:
+        result = await news_search(query, max_results, freshness)
+        return Response(content=result, media_type="application/json")
+    except Exception as e:
+        logger.error(f"SSE news search error: {e}")
+        return {"error": str(e)}
+
+@sse_app.get("/financial-data-search")
+async def sse_financial_data_search(
+    symbol: str,
+    data_type: str = "general",
+    max_results: int = 10
+):
+    """Financial data search endpoint for Teams bot"""
+    try:
+        result = await financial_data_search(symbol, data_type, max_results)
+        return Response(content=result, media_type="application/json")
+    except Exception as e:
+        logger.error(f"SSE financial data search error: {e}")
+        return {"error": str(e)}
+
+# =============================================================================
 # Server Initialization
 # =============================================================================
 
@@ -429,7 +498,7 @@ async def get_search_health() -> str:
 
 def main():
     """Main server initialization"""
-    logger.info("Starting Web Search MCP Server...")
+    logger.info("Starting Web Search MCP Server with SSE Support...")
     
     # Initialize services in sync context
     async def init_and_setup():
@@ -449,16 +518,32 @@ def main():
         thread.start()
         thread.join()
     
-    # Check if port is specified for HTTP mode
+    # Check if port is specified
     import sys
     if len(sys.argv) > 1 and '--port' in sys.argv:
         port_index = sys.argv.index('--port') + 1
         if port_index < len(sys.argv):
             port = int(sys.argv[port_index])
-            logger.info(f"Starting FastMCP server in HTTP mode on port {port}")
-            app.run(transport="streamable-http", host="0.0.0.0", port=port)
+            
+            # Check if SSE mode is requested
+            if '--sse' in sys.argv:
+                logger.info(f"Starting Web Search SSE server on port {port}")
+                uvicorn.run(sse_app, host="0.0.0.0", port=port, log_level="info")
+            else:
+                logger.info(f"Starting FastMCP server in HTTP mode on port {port}")
+                app.run(transport="streamable-http", host="0.0.0.0", port=port)
         else:
             logger.error("Port specified but no port number provided")
+            app.run()
+    elif '--sse-port' in sys.argv:
+        # Start SSE server on specified port
+        port_index = sys.argv.index('--sse-port') + 1
+        if port_index < len(sys.argv):
+            sse_port = int(sys.argv[port_index])
+            logger.info(f"Starting Web Search SSE server on port {sse_port}")
+            uvicorn.run(sse_app, host="0.0.0.0", port=sse_port, log_level="info")
+        else:
+            logger.error("SSE port specified but no port number provided")
             app.run()
     else:
         # Run the FastMCP server in stdio mode (default)

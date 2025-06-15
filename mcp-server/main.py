@@ -2,7 +2,7 @@
 """
 Corporate Actions MCP Server
 Proper MCP implementation using Azure OpenAI, AI Search, and Cosmos DB
-Following Model Context Protocol specification
+Following Model Context Protocol specification with SSE support
 """
 
 import asyncio
@@ -16,6 +16,12 @@ from dotenv import load_dotenv
 
 # MCP imports
 from fastmcp import FastMCP
+
+# FastAPI imports for SSE support
+from fastapi import FastAPI, Response
+from fastapi.responses import StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
+import uvicorn
 
 # Azure SDK imports
 from azure.cosmos.aio import CosmosClient
@@ -400,23 +406,11 @@ def get_sample_comments(event_id: str = None) -> List[Dict[str, Any]]:
     return all_comments
 
 # =============================================================================
-# MCP Tools Registration
+# Core Implementation Functions (used by both MCP tools and SSE endpoints)
 # =============================================================================
 
-@app.tool()
-async def rag_query(query: str, max_results: int = 5, include_comments: bool = True, chat_history: str = "") -> str:
-    """
-    Process a RAG query for corporate actions data using Azure AI services.
-    
-    Args:
-        query: Natural language query about corporate actions
-        max_results: Maximum number of search results to consider (1-20)
-        include_comments: Whether to include user comments in the response
-        chat_history: JSON string of recent chat history for context (optional)
-    
-    Returns:
-        JSON string containing the RAG response with answer, sources, and metadata
-    """
+async def _rag_query_impl(query: str, max_results: int = 5, include_comments: bool = True, chat_history: str = "") -> str:
+    """Core RAG query implementation with timeout handling"""
     try:
         logger.info(f"Processing RAG query: {query}")
         
@@ -431,37 +425,100 @@ async def rag_query(query: str, max_results: int = 5, include_comments: bool = T
                 logger.warning("Invalid chat history JSON format, ignoring")
                 parsed_history = []
         
-        # Generate embedding for the query
-        embedding = await generate_embedding(query)
+        # Quick check for Azure services availability
+        if not openai_client or not search_client:
+            logger.warning("Azure services not available, using sample data for RAG")
+            # Use sample data directly
+            search_results = get_sample_events()[:max_results]
+            
+            # Generate a simple response without Azure OpenAI
+            context = ""
+            for i, result in enumerate(search_results):
+                context += f"\n--- Source {i+1} ---\n"
+                context += f"Company: {result.get('company_name', 'Unknown')}\n"
+                context += f"Event Type: {result.get('event_type', 'Unknown')}\n"
+                context += f"Description: {result.get('description', 'No description')}\n"
+                context += f"Status: {result.get('status', 'Unknown')}\n"
+            
+            # Simple keyword-based response for demo
+            query_lower = query.lower()
+            if "aapl" in query_lower or "apple" in query_lower:
+                answer = "Based on the sample data, Apple Inc. (AAPL) has a quarterly cash dividend event (AAPL_DIV_2024_Q1) that is confirmed. The dividend amount is $0.24 per share with an ex-date of 2024-02-15 and payment date of 2024-02-22."
+            elif "dividend" in query_lower:
+                answer = "I found dividend-related events in the sample data. Apple has a quarterly cash dividend of $0.24, and Tesla has a special dividend of $1.50. Both events are confirmed and have upcoming payment dates."
+            elif "split" in query_lower:
+                answer = "Microsoft Corporation has announced a 2-for-1 stock split (MSFT_SPLIT_2024) with an ex-date of 2024-03-01. This split will double the number of shares while halving the price per share."
+            else:
+                answer = f"I found {len(search_results)} corporate action events in the sample data related to your query about '{query}'. The data includes dividend payments, stock splits, and special distributions from major companies like Apple, Microsoft, and Tesla."
+            
+            return json.dumps({
+                "answer": answer,
+                "sources": search_results,
+                "confidence_score": 0.7,
+                "query_intent": "information_request",
+                "requires_visualization": False,
+                "note": "Using sample data - Azure services not configured"
+            }, indent=2, default=str)
         
-        # Perform vector search
-        search_results = await vector_search(embedding, max_results)
-        
-        # Enrich with comments if requested
-        if include_comments and search_results:
-            for result in search_results:
-                if "event_id" in result:
-                    comments = await get_event_comments(result["event_id"])
-                    result["comments"] = comments[:3]  # Limit to 3 recent comments
-        
-        # Generate RAG response with chat history
-        rag_response = await generate_rag_response(query, search_results, parsed_history)
-        
-        return json.dumps(rag_response, indent=2, default=str)
+        # Try Azure services with timeout
+        try:
+            # Set a shorter timeout for individual operations
+            import asyncio
+            
+            # Generate embedding with timeout
+            embedding_task = generate_embedding(query)
+            embedding = await asyncio.wait_for(embedding_task, timeout=10.0)
+            
+            # Perform vector search with timeout
+            search_task = vector_search(embedding, max_results)
+            search_results = await asyncio.wait_for(search_task, timeout=10.0)
+            
+            # Enrich with comments if requested (with timeout)
+            if include_comments and search_results:
+                for result in search_results[:3]:  # Limit to first 3 for performance
+                    if "event_id" in result:
+                        try:
+                            comments_task = get_event_comments(result["event_id"])
+                            comments = await asyncio.wait_for(comments_task, timeout=5.0)
+                            result["comments"] = comments[:2]  # Limit to 2 recent comments
+                        except asyncio.TimeoutError:
+                            result["comments"] = []
+            
+            # Generate RAG response with timeout
+            rag_task = generate_rag_response(query, search_results, parsed_history)
+            rag_response = await asyncio.wait_for(rag_task, timeout=10.0)
+            
+            return json.dumps(rag_response, indent=2, default=str)
+            
+        except asyncio.TimeoutError:
+            logger.warning("Azure services timeout, falling back to sample data")
+            # Fallback to sample data
+            search_results = get_sample_events()[:max_results]
+            
+            # Generate simple response
+            answer = f"Query processed using sample data due to service timeout. Found {len(search_results)} events related to your query about '{query}'."
+            
+            return json.dumps({
+                "answer": answer,
+                "sources": search_results,
+                "confidence_score": 0.5,
+                "query_intent": "information_request",
+                "requires_visualization": False,
+                "note": "Fallback due to Azure service timeout"
+            }, indent=2, default=str)
         
     except Exception as e:
-        logger.error(f"Error in RAG query tool: {e}")
+        logger.error(f"Error in RAG query implementation: {e}")
         return json.dumps({
             "error": f"RAG query failed: {str(e)}",
-            "answer": "Unable to process query due to technical error.",
+            "answer": "Unable to process query due to technical error. Please try again later.",
             "sources": [],
             "confidence_score": 0.0,
             "query_intent": "error",
             "requires_visualization": False
         })
 
-@app.tool()
-async def search_corporate_actions(
+async def _search_corporate_actions_impl(
     search_text: str = "",
     event_type: str = "",
     company_name: str = "",
@@ -470,21 +527,7 @@ async def search_corporate_actions(
     date_to: str = "",
     limit: int = 10
 ) -> str:
-    """
-    Search corporate action events based on specific criteria.
-    
-    Args:
-        search_text: Free text search across all fields
-        event_type: Filter by event type (dividend, split, merger, spinoff, etc.)
-        company_name: Filter by company name
-        status: Filter by event status (announced, confirmed, processed, cancelled)
-        date_from: Filter events from this date (YYYY-MM-DD format)
-        date_to: Filter events to this date (YYYY-MM-DD format)  
-        limit: Maximum number of results to return (1-50)
-    
-    Returns:
-        JSON string containing matching corporate action events
-    """
+    """Core search corporate actions implementation"""
     try:
         logger.info(f"Searching corporate actions with filters: {locals()}")
         
@@ -545,25 +588,15 @@ async def search_corporate_actions(
             }, indent=2, default=str)
             
     except Exception as e:
-        logger.error(f"Error in search tool: {e}")
+        logger.error(f"Error in search implementation: {e}")
         return json.dumps({
             "error": f"Search failed: {str(e)}",
             "events": [],
             "total_count": 0
         })
 
-@app.tool()
-async def get_event_details(event_id: str, include_comments: bool = True) -> str:
-    """
-    Get detailed information about a specific corporate action event.
-    
-    Args:
-        event_id: Unique identifier of the corporate action event
-        include_comments: Whether to include user comments and Q&A
-    
-    Returns:
-        JSON string containing detailed event information
-    """
+async def _get_event_details_impl(event_id: str, include_comments: bool = True) -> str:
+    """Core get event details implementation"""
     try:
         logger.info(f"Getting details for event: {event_id}")
         
@@ -608,6 +641,67 @@ async def get_event_details(event_id: str, include_comments: bool = True) -> str
             "error": f"Failed to retrieve event details: {str(e)}",
             "event_id": event_id
         })
+
+# =============================================================================
+# MCP Tools Registration
+# =============================================================================
+
+@app.tool()
+async def rag_query(query: str, max_results: int = 5, include_comments: bool = True, chat_history: str = "") -> str:
+    """
+    Process a RAG query for corporate actions data using Azure AI services.
+    
+    Args:
+        query: Natural language query about corporate actions
+        max_results: Maximum number of search results to consider (1-20)
+        include_comments: Whether to include user comments in the response
+        chat_history: JSON string of recent chat history for context (optional)
+    
+    Returns:
+        JSON string containing the RAG response with answer, sources, and metadata
+    """
+    return await _rag_query_impl(query, max_results, include_comments, chat_history)
+
+@app.tool()
+async def search_corporate_actions(
+    search_text: str = "",
+    event_type: str = "",
+    company_name: str = "",
+    status: str = "",
+    date_from: str = "",
+    date_to: str = "",
+    limit: int = 10
+) -> str:
+    """
+    Search corporate action events based on specific criteria.
+    
+    Args:
+        search_text: Free text search across all fields
+        event_type: Filter by event type (dividend, split, merger, spinoff, etc.)
+        company_name: Filter by company name
+        status: Filter by event status (announced, confirmed, processed, cancelled)
+        date_from: Filter events from this date (YYYY-MM-DD format)
+        date_to: Filter events to this date (YYYY-MM-DD format)  
+        limit: Maximum number of results to return (1-50)
+    
+    Returns:
+        JSON string containing matching corporate action events
+    """
+    return await _search_corporate_actions_impl(search_text, event_type, company_name, status, date_from, date_to, limit)
+
+@app.tool()
+async def get_event_details(event_id: str, include_comments: bool = True) -> str:
+    """
+    Get detailed information about a specific corporate action event.
+    
+    Args:
+        event_id: Unique identifier of the corporate action event
+        include_comments: Whether to include user comments and Q&A
+    
+    Returns:
+        JSON string containing detailed event information
+    """
+    return await _get_event_details_impl(event_id, include_comments)
 
 @app.tool()
 async def add_event_comment(
@@ -769,12 +863,134 @@ async def health_resource() -> str:
     return await get_service_health()
 
 # =============================================================================
+# SSE (Server-Sent Events) Support for Teams Bot Integration
+# =============================================================================
+
+# Create FastAPI app for SSE endpoints
+sse_app = FastAPI(title="Corporate Actions SSE API", version="1.0.0")
+
+# Add CORS middleware for Teams bot integration
+sse_app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Configure appropriately for production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@sse_app.get("/health")
+async def sse_health():
+    """Health check endpoint for SSE API"""
+    return {"status": "healthy", "service": "Corporate Actions SSE API"}
+
+@sse_app.get("/rag-query")
+async def sse_rag_query(
+    query: str,
+    max_results: int = 5,
+    include_comments: bool = True,
+    chat_history: str = ""
+):
+    """RAG query endpoint for Teams bot"""
+    try:
+        # Call the implementation function directly
+        result = await _rag_query_impl(query, max_results, include_comments, chat_history)
+        return Response(content=result, media_type="application/json")
+    except Exception as e:
+        logger.error(f"SSE RAG query error: {e}")
+        return {"error": str(e)}
+
+@sse_app.get("/search-corporate-actions")
+async def sse_search_corporate_actions(
+    search_text: str = "",
+    event_type: str = "",
+    company_name: str = "",
+    status: str = "",
+    date_from: str = "",
+    date_to: str = "",
+    limit: int = 10
+):
+    """Search corporate actions endpoint for Teams bot"""
+    try:
+        # Call the implementation function directly
+        result = await _search_corporate_actions_impl(
+            search_text, event_type, company_name, status, date_from, date_to, limit
+        )
+        return Response(content=result, media_type="application/json")
+    except Exception as e:
+        logger.error(f"SSE search error: {e}")
+        return {"error": str(e)}
+
+@sse_app.get("/events")
+async def sse_list_events():
+    """List events endpoint for Teams bot"""
+    try:
+        # Use the resource function directly by calling get_sample_events
+        # since the list_recent_events function is an MCP resource
+        events = get_sample_events()
+        result = json.dumps({
+            "events": events,
+            "total_count": len(events),
+            "note": "Using sample data - Azure AI Search not configured"
+        }, indent=2, default=str)
+        return Response(content=result, media_type="application/json")
+    except Exception as e:
+        logger.error(f"SSE events error: {e}")
+        return {"error": str(e)}
+
+@sse_app.get("/event-details/{event_id}")
+async def sse_event_details(event_id: str, include_comments: bool = True):
+    """Get event details endpoint for Teams bot"""
+    try:
+        # Call the implementation function directly
+        result = await _get_event_details_impl(event_id, include_comments)
+        return Response(content=result, media_type="application/json")
+    except Exception as e:
+        logger.error(f"SSE event details error: {e}")
+        return {"error": str(e)}
+
+@sse_app.get("/sse/events")
+async def sse_stream_events():
+    """Server-Sent Events stream for real-time updates"""
+    async def event_generator():
+        while True:
+            try:
+                # Get recent events using sample data
+                events = get_sample_events()
+                events_data = {
+                    "events": events,
+                    "total_count": len(events),
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+                
+                # Send as SSE format
+                yield f"data: {json.dumps(events_data, default=str)}\n\n"
+                
+                # Wait before next update
+                await asyncio.sleep(30)  # Send updates every 30 seconds
+                
+            except Exception as e:
+                logger.error(f"SSE stream error: {e}")
+                yield f"data: {json.dumps({'error': str(e)})}\n\n"
+                await asyncio.sleep(10)
+    
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "Cache-Control"
+        }
+    )
+
+# =============================================================================
 # Application Startup
 # =============================================================================
 
 def main():
     """Main application entry point"""
-    logger.info("🚀 Starting Corporate Actions MCP Server")
+    logger.info("🚀 Starting Corporate Actions MCP Server with SSE Support")
     
     # Initialize Azure clients in sync context
     async def init_and_run():
@@ -793,16 +1009,32 @@ def main():
         thread.start()
         thread.join()
     
-    # Check if port is specified for HTTP mode
+    # Check if port is specified
     import sys
     if len(sys.argv) > 1 and '--port' in sys.argv:
         port_index = sys.argv.index('--port') + 1
         if port_index < len(sys.argv):
             port = int(sys.argv[port_index])
-            logger.info(f"Starting FastMCP server in HTTP mode on port {port}")
-            app.run(transport="streamable-http", host="0.0.0.0", port=port)
+            
+            # Check if SSE mode is requested
+            if '--sse' in sys.argv:
+                logger.info(f"Starting SSE server on port {port}")
+                uvicorn.run(sse_app, host="0.0.0.0", port=port, log_level="info")
+            else:
+                logger.info(f"Starting FastMCP server in HTTP mode on port {port}")
+                app.run(transport="streamable-http", host="0.0.0.0", port=port)
         else:
             logger.error("Port specified but no port number provided")
+            app.run()
+    elif '--sse-port' in sys.argv:
+        # Start SSE server on specified port
+        port_index = sys.argv.index('--sse-port') + 1
+        if port_index < len(sys.argv):
+            sse_port = int(sys.argv[port_index])
+            logger.info(f"Starting SSE server on port {sse_port}")
+            uvicorn.run(sse_app, host="0.0.0.0", port=sse_port, log_level="info")
+        else:
+            logger.error("SSE port specified but no port number provided")
             app.run()
     else:
         # Run the FastMCP server in stdio mode (default)

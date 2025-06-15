@@ -2,7 +2,7 @@
 """
 Comments MCP Server
 Handles questions, concerns, and comments from market participants
-Following Model Context Protocol specification
+Following Model Context Protocol specification with SSE support
 """
 
 import asyncio
@@ -16,6 +16,12 @@ import uuid
 
 # MCP imports
 from fastmcp import FastMCP
+
+# FastAPI imports for SSE support
+from fastapi import FastAPI, Response
+from fastapi.responses import StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
+import uvicorn
 
 # Azure SDK imports
 from azure.cosmos.aio import CosmosClient
@@ -608,7 +614,6 @@ async def get_comments_health() -> str:
                 "cosmos_db_configured": bool(os.getenv("AZURE_COSMOS_ENDPOINT"))
             }
         }
-        
         return json.dumps(health_status, indent=2, default=str)
         
     except Exception as e:
@@ -621,6 +626,92 @@ async def get_comments_health() -> str:
         })
 
 # =============================================================================
+# SSE (Server-Sent Events) Support for Teams Bot Integration
+# =============================================================================
+
+# Create FastAPI app for SSE endpoints
+sse_app = FastAPI(title="Comments SSE API", version="1.0.0")
+
+# Add CORS middleware for Teams bot integration
+sse_app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Configure appropriately for production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@sse_app.get("/health")
+async def sse_health():
+    """Health check endpoint for SSE API"""
+    return {"status": "healthy", "service": "Comments SSE API"}
+
+@sse_app.get("/event-comments/{event_id}")
+async def sse_get_event_comments(
+    event_id: str,
+    limit: int = 50,
+    offset: int = 0,
+    comment_type: str = "",
+    status: str = ""
+):
+    """Get event comments endpoint for Teams bot"""
+    try:
+        # Call the MCP tool function directly with correct parameters
+        result = await get_event_comments(event_id, limit, True, comment_type)
+        return Response(content=result, media_type="application/json")
+    except Exception as e:
+        logger.error(f"SSE get event comments error: {e}")
+        return {"error": str(e)}
+
+@sse_app.post("/add-comment")
+async def sse_add_comment(
+    event_id: str,
+    comment_text: str,
+    comment_type: str = "general",
+    user_id: str = "anonymous",
+    organization: str = ""
+):
+    """Add comment endpoint for Teams bot"""
+    try:
+        # Call the MCP tool function directly with correct parameter names
+        result = await add_comment(event_id, user_id, comment_text, comment_type, organization)
+        return Response(content=result, media_type="application/json")
+    except Exception as e:
+        logger.error(f"SSE add comment error: {e}")
+        return {"error": str(e)}
+
+@sse_app.get("/search-comments")
+async def sse_search_comments(
+    query: str,
+    limit: int = 20,
+    event_id: str = "",
+    comment_type: str = ""
+):
+    """Search comments endpoint for Teams bot"""
+    try:
+        # Call the MCP tool function directly with correct parameters
+        event_ids = [event_id] if event_id else []
+        comment_types = [comment_type] if comment_type else []
+        result = await search_comments(query, event_ids, comment_types, "", "", limit)
+        return Response(content=result, media_type="application/json")
+    except Exception as e:
+        logger.error(f"SSE search comments error: {e}")
+        return {"error": str(e)}
+
+@sse_app.get("/comment-analytics/{event_id}")
+async def sse_comment_analytics(
+    event_id: str,
+    days_back: int = 30
+):
+    """Get comment analytics endpoint for Teams bot"""
+    try:
+        result = await get_comment_analytics(event_id, days_back)
+        return Response(content=result, media_type="application/json")
+    except Exception as e:
+        logger.error(f"SSE comment analytics error: {e}")
+        return {"error": str(e)}
+
+# =============================================================================
 # Server Initialization
 # =============================================================================
 
@@ -630,7 +721,7 @@ async def get_comments_health() -> str:
 
 def main():
     """Main server initialization"""
-    logger.info("Starting Comments MCP Server...")
+    logger.info("Starting Comments MCP Server with SSE Support...")
     
     # Initialize services in sync context
     async def init_and_setup():
@@ -650,16 +741,32 @@ def main():
         thread.start()
         thread.join()
     
-    # Check if port is specified for HTTP mode
+    # Check if port is specified
     import sys
     if len(sys.argv) > 1 and '--port' in sys.argv:
         port_index = sys.argv.index('--port') + 1
         if port_index < len(sys.argv):
             port = int(sys.argv[port_index])
-            logger.info(f"Starting FastMCP server in HTTP mode on port {port}")
-            app.run(transport="streamable-http", host="0.0.0.0", port=port)
+            
+            # Check if SSE mode is requested
+            if '--sse' in sys.argv:
+                logger.info(f"Starting Comments SSE server on port {port}")
+                uvicorn.run(sse_app, host="0.0.0.0", port=port, log_level="info")
+            else:
+                logger.info(f"Starting FastMCP server in HTTP mode on port {port}")
+                app.run(transport="streamable-http", host="0.0.0.0", port=port)
         else:
             logger.error("Port specified but no port number provided")
+            app.run()
+    elif '--sse-port' in sys.argv:
+        # Start SSE server on specified port
+        port_index = sys.argv.index('--sse-port') + 1
+        if port_index < len(sys.argv):
+            sse_port = int(sys.argv[port_index])
+            logger.info(f"Starting Comments SSE server on port {sse_port}")
+            uvicorn.run(sse_app, host="0.0.0.0", port=sse_port, log_level="info")
+        else:
+            logger.error("SSE port specified but no port number provided")
             app.run()
     else:
         # Run the FastMCP server in stdio mode (default)

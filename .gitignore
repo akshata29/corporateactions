@@ -120,3 +120,5 @@ data/GexData/*/
 data/GexHistory/*
 data/Accumulation/*
 data/Finra/*
+
+node_modules/
