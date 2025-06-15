@@ -111,6 +111,51 @@ graph TB
 - **Azure Service Integration**: Robust connection handling with fallback mechanisms
 - **Data Structure Flexibility**: Handles both `issuer_name` and `company_name` field variations
 
+## 🔄 Recent Updates & Fixes (June 2025)
+
+### Azure AI Streamlit Application Enhancements ⭐
+
+#### Field Normalization & Data Structure Fixes
+- **✅ Fixed Company Name Display Issue**: Resolved "Unknown Company" problem in dashboard visualizations
+  - Enhanced MCP data parsing logic to properly handle different JSON response formats
+  - Improved `normalize_event_data()` function with better field mapping (`issuer_name` ↔ `company_name`)
+  - Added comprehensive fallback mechanisms for various data structures
+  - Enhanced support for nested security objects and symbol extraction
+
+#### Date Parsing & Analytics Improvements
+- **✅ Fixed Advanced Analytics Date Parsing Error**: Resolved `ValueError: time data "N/A" doesn't match format` 
+  - Added `errors='coerce'` parameter to `pd.to_datetime()` calls to handle invalid date strings
+  - Enhanced timeline visualization with NaT (Not a Time) value filtering
+  - Added graceful error handling for missing or invalid date fields
+  - Improved data validation in analytics dashboard
+
+#### Enhanced MCP Integration
+- **✅ Improved MCP Response Parsing**: Enhanced JSON parsing logic for better data extraction
+  - Added support for complete JSON responses with `events` arrays
+  - Implemented fallback regex parsing for malformed responses
+  - Enhanced debug output to show actual data structure for troubleshooting
+  - Better handling of different MCP server response formats
+
+#### User Experience Improvements
+- **✅ Enhanced Dashboard Visualizations**: Better data presentation and error handling
+  - Added validation warnings for timeline visualizations with no valid dates
+  - Improved status color coding and visual indicators
+  - Enhanced data structure debugging tools
+  - Better fallback mechanisms when live data is unavailable
+
+#### Code Quality & Robustness
+- **✅ Enhanced Error Handling**: More robust error handling and user feedback
+  - Added comprehensive try-catch blocks for data parsing operations
+  - Improved error messages and user guidance
+  - Enhanced fallback data generation for demo purposes
+  - Better logging and debugging capabilities
+
+### Impact & Benefits
+- **🎯 Improved User Experience**: Dashboard now correctly displays company names and handles date fields gracefully
+- **🔧 Enhanced Reliability**: Better error handling prevents application crashes from data parsing issues  
+- **📊 Better Data Visualization**: Timeline and analytics charts now work correctly with various data formats
+- **🛠️ Improved Debugging**: Enhanced debug tools help identify and resolve data structure issues quickly
+
 ## 🏗️ Architecture Components
 
 This POC leverages Azure Services and the Model Context Protocol to build an Agentic RAG (Retrieval-Augmented Generation) system with fully MCP-compliant servers.
@@ -602,6 +647,87 @@ response = await app.call_tool('get_comment_analytics', {
 analytics = json.loads(response)
 print(f"Resolution Rate: {analytics['summary']['resolution_rate']}%")
 print(f"Engagement Trends: {analytics['recent_activity']}")
+```
+
+### Test Azure AI Streamlit Application Fixes
+```python
+# Test field normalization fixes
+from clients.streamlit_azure_ai.app import normalize_event_data
+
+# Test data with different field structures
+test_events = [
+    {"issuer_name": "Apple Inc.", "symbol": "AAPL", "event_type": "dividend"},
+    {"company_name": "Microsoft Corp.", "symbol": "MSFT", "event_type": "split"},
+    {"security": {"symbol": "GOOGL"}, "issuer_name": "Alphabet Inc."}
+]
+
+normalized = normalize_event_data(test_events)
+for event in normalized:
+    assert "company_name" in event, "Field normalization failed"
+    print(f"✅ Company: {event['company_name']}, Symbol: {event.get('symbol', 'N/A')}")
+
+# Test date parsing fixes
+import pandas as pd
+
+# Test with problematic date values
+test_dates = ["2025-06-15", "N/A", None, "Invalid Date", "2025-12-25T10:30:00Z"]
+df = pd.DataFrame({"announcement_date": test_dates})
+
+# This should not raise ValueError anymore
+df['announcement_date'] = pd.to_datetime(df['announcement_date'], errors='coerce')
+valid_dates = df.dropna(subset=['announcement_date'])
+
+print(f"✅ Successfully parsed {len(valid_dates)} valid dates from {len(test_dates)} inputs")
+print(f"✅ No ValueError raised for invalid date strings")
+```
+
+### Test MCP Response Parsing Improvements
+```python
+# Test enhanced MCP response parsing
+import json
+import re
+
+def test_mcp_parsing(mcp_response):
+    """Test the improved MCP response parsing logic"""
+    parsed_events = []
+    
+    # Test complete JSON parsing
+    if isinstance(mcp_response, str):
+        try:
+            mcp_json = json.loads(mcp_response)
+            if isinstance(mcp_json, dict) and 'events' in mcp_json:
+                parsed_events = mcp_json['events']
+                print("✅ Successfully parsed complete JSON with events array")
+            elif isinstance(mcp_json, list):
+                parsed_events = mcp_json
+                print("✅ Successfully parsed JSON array")
+        except json.JSONDecodeError:
+            # Test fallback regex parsing
+            json_pattern = r'\{(?:[^{}]|{[^{}]*})*\}'
+            json_matches = re.findall(json_pattern, mcp_response)
+            
+            for match in json_matches:
+                try:
+                    event_data = json.loads(match)
+                    if isinstance(event_data, dict):
+                        parsed_events.append(event_data)
+                except:
+                    continue
+            print(f"✅ Successfully parsed {len(parsed_events)} events via regex fallback")
+    
+    return parsed_events
+
+# Test with various response formats
+test_responses = [
+    '{"events": [{"company_name": "Apple Inc.", "event_type": "dividend"}]}',
+    '[{"company_name": "Microsoft", "event_type": "split"}]',
+    'Some text {"company_name": "Tesla", "event_type": "merger"} more text',
+    'Malformed { json response'
+]
+
+for response in test_responses:
+    events = test_mcp_parsing(response)
+    print(f"✅ Parsed {len(events)} events from response")
 ```
 
 ## 🚀 Enhanced Deployment Guide
