@@ -16,5 +16,6 @@ Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$RepoRoot\mcp
 # Client Applications
 Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$RepoRoot\clients\streamlit-ui'; streamlit run app_mcp.py"
 Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$RepoRoot\clients\corporate-actions-agent'; npm run dev"
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$RepoRoot\clients\streamlit-azure-ai'; streamlit run app.py"
 
 Write-Host "✅ All services starting in separate windows!"

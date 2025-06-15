@@ -1,0 +1,24 @@
+# Azure AI Agent Service integration requirements
+azure-ai-projects>=1.0.0b11
+azure-identity>=1.15.0
+azure-core>=1.29.0
+openai>=1.3.0
+
+# MCP integration (already installed)
+# mcp>=1.9.0
+# fastmcp>=2.8.0
+
+# Streamlit and UI
+streamlit>=1.28.0
+pandas>=2.1.0
+plotly>=5.17.0
+
+# Environment and configuration
+python-dotenv>=1.0.0
+
+# HTTP requests and JSON handling
+requests>=2.31.0
+aiohttp>=3.8.0
+
+# Date and time handling
+python-dateutil>=2.8.0
