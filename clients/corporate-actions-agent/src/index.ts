@@ -58,6 +58,8 @@ app.on('message', async ({ send, activity }: any) => {
     await handleStatusCommand(send);
   } else if (text.startsWith('/test')) {
     await handleTestCommand(send, activity);
+  } else if (text.startsWith('/notifications')) {
+    await handleNotificationsCommand(send, activity);
   } else if (text.startsWith('/')) {
     await send({
       type: 'message',
@@ -1170,3 +1172,129 @@ process.on('SIGTERM', async () => {
   await notificationService.stop();
   process.exit(0);
 });
+
+/**
+ * Handle notifications command - check for pending proactive notifications
+ */
+async function handleNotificationsCommand(send: any, activity: any) {
+  const command = activity.text.substring(14).trim(); // Remove "/notifications "
+  const userId = activity.from.id;
+  
+  await send({ type: 'typing' });
+
+  try {
+    if (command === 'check' || command === '') {
+      // Get pending notifications for this user
+      const pendingNotifications = notificationService.getPendingNotifications(userId);
+      
+      if (pendingNotifications.length === 0) {
+        await send({
+          type: 'message',
+          text: `📬 **No Pending Notifications**
+
+✅ You're all caught up! No pending proactive notifications.
+
+💡 **To test notifications:**
+• \`/test breaking AAPL\` - Test breaking news alert
+• \`/test all\` - Test all notification types
+• \`/notifications check\` - Check for pending notifications`
+        });
+        return;
+      }
+
+      // Show the first pending notification as an adaptive card
+      const notification = notificationService.getNextNotification(userId);
+      if (notification) {
+        await send({
+          type: 'message',
+          text: `🔔 **Pending Notification** (${pendingNotifications.length} total)`
+        });
+
+        await send({
+          type: 'message',
+          attachments: [
+            {
+              contentType: 'application/vnd.microsoft.card.adaptive',
+              content: notification.card
+            }
+          ]
+        });
+
+        // If there are more notifications, show a summary
+        const remaining = notificationService.getPendingNotifications(userId).length;
+        if (remaining > 0) {
+          await send({
+            type: 'message',
+            text: `📋 **${remaining} more notifications pending**
+
+Use \`/notifications check\` to see the next one.`
+          });
+        }
+      }
+    } else if (command === 'clear') {
+      const count = notificationService.getPendingNotifications(userId).length;
+      notificationService.clearPendingNotifications(userId);
+      
+      await send({
+        type: 'message',
+        text: `🧹 **Notifications Cleared**
+
+✅ Cleared ${count} pending notifications.
+
+💡 Use \`/test all\` to generate new test notifications.`
+      });
+    } else if (command === 'all') {
+      // Show all pending notifications as a summary
+      const pendingNotifications = notificationService.getPendingNotifications(userId);
+      
+      if (pendingNotifications.length === 0) {
+        await send({
+          type: 'message',
+          text: `📭 No pending notifications to display.`
+        });
+        return;
+      }
+
+      const summaryText = pendingNotifications.map((notification, index) => {
+        const time = format(notification.timestamp, 'h:mm a');
+        const preview = notification.message.substring(0, 50) + '...';
+        return `${index + 1}. **${time}** - ${preview}`;
+      }).join('\n');
+
+      await send({
+        type: 'message',
+        text: `📋 **All Pending Notifications** (${pendingNotifications.length})
+
+${summaryText}
+
+💡 Use \`/notifications check\` to view them as adaptive cards.
+💡 Use \`/notifications clear\` to clear all pending notifications.`
+      });
+    } else {
+      await send({
+        type: 'message',
+        text: `📬 **Notifications Command Help**
+
+**Check for notifications:**
+• \`/notifications\` or \`/notifications check\` - View next pending notification
+• \`/notifications all\` - List all pending notifications
+• \`/notifications clear\` - Clear all pending notifications
+
+**Note:** This command is for checking proactive notifications that were triggered by test commands or scheduled events.
+
+💡 Use \`/test all\` to generate test notifications first.`
+      });
+    }
+
+  } catch (error) {
+    console.error('Notifications command error:', error);
+    await send({
+      type: 'message',
+      text: `❌ **Notifications Command Failed**
+
+${error instanceof Error ? error.message : 'Unknown error occurred'}
+
+💡 Try \`/test all\` to generate notifications first.`
+    });
+  }
+}

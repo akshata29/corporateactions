@@ -30,6 +30,14 @@ interface NotificationHistoryItem {
     userId: string;
 }
 
+interface PendingNotification {
+    userId: string;
+    userName: string;
+    card: any;
+    message: string;
+    timestamp: Date;
+}
+
 /**
  * Enhanced Notification Service for proactive Teams messaging
  */
@@ -38,6 +46,7 @@ export class NotificationService {
     private notificationHistory: NotificationHistoryItem[] = [];
     private scheduledJobs: schedule.Job[] = [];
     private isRunning: boolean = false;
+    private pendingNotifications: PendingNotification[] = [];
 
     constructor(private app: App) {
         console.log('🔔 NotificationService initialized');
@@ -284,14 +293,81 @@ Hello ${subscription.userName}! Here's your weekly summary:
                 });
             }
         }
-    }
-
-    private async sendProactiveMessage(subscription: UserSubscription, message: string): Promise<void> {
+    }    private async sendProactiveMessage(subscription: UserSubscription, message: string): Promise<void> {
         try {
-            // TODO: Implement actual proactive messaging
-            console.log(`📤 Would send to ${subscription.userName}: ${message.substring(0, 50)}...`);
+            console.log(`📤 Sending proactive notification to ${subscription.userName}...`);
+            
+            // Create a notification adaptive card
+            const notificationCard = {
+                $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
+                type: 'AdaptiveCard',
+                version: '1.3',
+                body: [
+                    {
+                        type: 'TextBlock',
+                        text: '🔔 Proactive Notification',
+                        weight: 'Bolder',
+                        size: 'Medium',
+                        color: 'Accent'
+                    },
+                    {
+                        type: 'TextBlock',
+                        text: message,
+                        wrap: true,
+                        spacing: 'Medium'
+                    },
+                    {
+                        type: 'TextBlock',
+                        text: `📅 ${format(new Date(), 'PPpp')} | 👤 ${subscription.userName}`,
+                        size: 'Small',
+                        color: 'Default',
+                        isSubtle: true
+                    }
+                ],
+                actions: [
+                    {
+                        type: 'Action.Submit',
+                        title: '✅ Acknowledge',
+                        data: { action: 'acknowledge_notification' }
+                    },
+                    {
+                        type: 'Action.Submit',
+                        title: '⚙️ Settings',
+                        data: { action: 'viewSettings' }
+                    },
+                    {
+                        type: 'Action.Submit',
+                        title: '📊 View Events',
+                        data: { action: 'viewEvents' }
+                    }
+                ]
+            };
+
+            // Store the notification card for retrieval by the main app
+            // This approach works better with the Teams AI library architecture
+            this.pendingNotifications = this.pendingNotifications || [];
+            this.pendingNotifications.push({
+                userId: subscription.userId,
+                userName: subscription.userName,
+                card: notificationCard,
+                message: message,
+                timestamp: new Date()
+            });
+            
+            // Log detailed notification info for debugging
+            console.log(`✅ Proactive notification queued for ${subscription.userName}`);
+            console.log(`📋 Message preview: ${message.substring(0, 100)}...`);
+            console.log(`📊 Total pending notifications: ${this.pendingNotifications.length}`);
+            
+            // In a real implementation, this would use Bot Framework proactive messaging:
+            // const adapter = this.app.adapter;
+            // const conversationReference = TurnContext.getConversationReference(subscription.activity);
+            // await adapter.continueConversation(conversationReference, async (context) => {
+            //     await context.sendActivity(MessageFactory.attachment(CardFactory.adaptiveCard(notificationCard)));
+            // });
+            
         } catch (error) {
-            console.error(`Failed to send proactive message to ${subscription.userId}:`, error);
+            console.error(`❌ Failed to send proactive message to ${subscription.userId}:`, error);
             throw error;
         }
     }
@@ -578,5 +654,40 @@ Hello ${subscription.userName}! Here's your test weekly summary:
         await this.sendWeeklyDigest();
         
         console.log('✅ All scheduled notifications triggered for testing');
+    }
+
+    /**
+     * Get pending notifications for a user (for DevTools testing)
+     */
+    getPendingNotifications(userId?: string): PendingNotification[] {
+        if (userId) {
+            return this.pendingNotifications.filter(n => n.userId === userId);
+        }
+        return this.pendingNotifications;
+    }
+
+    /**
+     * Clear pending notifications
+     */
+    clearPendingNotifications(userId?: string): void {
+        if (userId) {
+            this.pendingNotifications = this.pendingNotifications.filter(n => n.userId !== userId);
+        } else {
+            this.pendingNotifications = [];
+        }
+        console.log(`🧹 Cleared pending notifications${userId ? ` for user ${userId}` : ''}`);
+    }
+
+    /**
+     * Get and clear the next pending notification for a user
+     */
+    getNextNotification(userId: string): PendingNotification | null {
+        const index = this.pendingNotifications.findIndex(n => n.userId === userId);
+        if (index >= 0) {
+            const notification = this.pendingNotifications[index];
+            this.pendingNotifications.splice(index, 1);
+            return notification;
+        }
+        return null;
     }
 }

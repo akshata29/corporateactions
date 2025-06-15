@@ -51,7 +51,7 @@ export class MCPClientManager {
                 headers: {
                     'Accept': 'application/json'
                 },
-                timeout: 15000  // Reduced from 30000 to 15000ms
+                timeout: 30000  // Reduced from 30000 to 15000ms
             });
 
             return response.data;

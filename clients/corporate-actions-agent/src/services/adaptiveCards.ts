@@ -424,6 +424,7 @@ export function createHelpCard(): any {
               { title: "/toggle [setting]", value: "Toggle notification types" },
               { title: "/status", value: "Check system status" },
               { title: "/test [type]", value: "Test notification system (dev)" },
+              { title: "/notifications check", value: "Check Pending Notifications" },
               { title: "/help", value: "Show this help message" }
             ]
           }
