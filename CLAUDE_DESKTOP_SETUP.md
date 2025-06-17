@@ -33,7 +33,7 @@ This guide will help you connect Claude Desktop to your local Corporate Actions 
 #### Install Python Dependencies
 ```bash
 # Navigate to each MCP server directory and install dependencies
-cd d:\repos\corporateactions\mcp-server
+cd d:\repos\corporateactions\mcp-rag
 pip install -r requirements.txt
 
 cd d:\repos\corporateactions\mcp-websearch  
@@ -46,7 +46,7 @@ pip install -r requirements.txt
 #### Set Environment Variables
 Make sure you have a `.env` file in each MCP server directory with:
 
-**For mcp-server (.env):**
+**For mcp-rag (.env):**
 ```env
 AZURE_OPENAI_API_KEY=your_api_key
 AZURE_OPENAI_ENDPOINT=your_endpoint
@@ -80,7 +80,7 @@ Test each server in stdio mode (this is how Claude Desktop will run them):
 
 ```bash
 # Test RAG Server
-cd d:\repos\corporateactions\mcp-server
+cd d:\repos\corporateactions\mcp-rag
 python main.py
 
 # Test Web Search Server  
@@ -180,9 +180,9 @@ What questions have been submitted about corporate actions?
   "mcpServers": {
     "corporate-actions-rag": {
       "command": "python",
-      "args": ["d:\\repos\\corporateactions\\mcp-server\\main.py"],
+      "args": ["d:\\repos\\corporateactions\\mcp-rag\\main.py"],
       "env": {
-        "PYTHONPATH": "d:\\repos\\corporateactions\\mcp-server",
+        "PYTHONPATH": "d:\\repos\\corporateactions\\mcp-rag",
         "PYTHONUNBUFFERED": "1"
       }
     },

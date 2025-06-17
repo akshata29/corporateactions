@@ -78,14 +78,14 @@ try {
 $envFile = ".env"
 if (!(Test-Path $envFile)) {
     Write-Host "Creating .env file..." -ForegroundColor Cyan
-    Copy-Item "mcp-server\.env.example" $envFile
+    Copy-Item "mcp-rag\.env.example" $envFile
     Write-Host "⚠️  Please update the .env file with your Azure credentials before running the servers." -ForegroundColor Yellow
 }
 
 Write-Host "`n🚀 Starting MCP Servers..." -ForegroundColor Green
 
 # Start MCP Server (Main RAG server)
-Start-PythonService -ServiceName "MCP Server (RAG)" -Directory "mcp-server" -Port 8000
+Start-PythonService -ServiceName "MCP Server (RAG)" -Directory "mcp-rag" -Port 8000
 
 # Start Web Search MCP Server
 Start-PythonService -ServiceName "Web Search MCP Server" -Directory "mcp-websearch" -Port 8001

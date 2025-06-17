@@ -277,7 +277,7 @@ This POC leverages Azure Services and the Model Context Protocol to build an Age
 3. **Install server-specific dependencies**
    ```bash
    # Main RAG server
-   cd mcp-server
+   cd mcp-rag
    pip install -r requirements.txt
    cd ..
    
@@ -304,7 +304,7 @@ This POC leverages Azure Services and the Model Context Protocol to build an Age
    # Azure AI Search Configuration
    AZURE_SEARCH_ENDPOINT=https://your-search-service.search.windows.net
    AZURE_SEARCH_KEY=your-search-admin-key
-   AZURE_SEARCH_INDEX_NAME=corporate-actions
+   AZURE_SEARCH_INDEX_NAME=corporateactions
    
    # Azure Cosmos DB Configuration
    AZURE_COSMOS_ENDPOINT=https://your-cosmos-account.documents.azure.com:443/
@@ -335,7 +335,7 @@ You can start each MCP server individually in either mode:
 #### MCP HTTP Mode (Ports 8000-8002)
 ```bash
 # Main RAG server (MCP HTTP)
-cd mcp-server
+cd mcp-rag
 python main.py --port 8000
 
 # Web search server (MCP HTTP)
@@ -350,7 +350,7 @@ python main.py --port 8002
 #### SSE Mode (Ports 8003-8005)
 ```bash
 # Main RAG server (SSE)
-cd mcp-server
+cd mcp-rag
 python main.py --sse --port 8003
 
 # Web search server (SSE)
@@ -467,7 +467,7 @@ from mcp import ClientSession
 from mcp.client.stdio import stdio_client
 
 # Connect to enhanced RAG server
-async with stdio_client(["python", "mcp-server/main.py"]) as (read, write):
+async with stdio_client(["python", "mcp-rag/main.py"]) as (read, write):
     async with ClientSession(read, write) as session:
         # Initialize the session
         await session.initialize()
@@ -562,7 +562,7 @@ See `data-models/corporate_action_schemas.py` for complete schemas.
 
 ```
 corporateactions/
-├── mcp-server/                    # Enhanced RAG MCP server ⭐
+├── mcp-rag/                    # Enhanced RAG MCP server ⭐
 │   ├── main.py                   # FastMCP with advanced RAG + visualizations + SSE
 │   └── requirements.txt          # MCP + Azure + ML dependencies
 ├── mcp-websearch/                # Enhanced web search MCP server 🌐
@@ -615,7 +615,7 @@ corporateactions/
 
 ### Key Enhancements by Directory 🎯
 
-#### `/mcp-server/` - Advanced RAG Capabilities + SSE Support
+#### `/mcp-rag/` - Advanced RAG Capabilities + SSE Support
 - ✅ **Chat History Integration**: Context-aware conversations
 - ✅ **Dynamic Visualization Detection**: Smart chart generation triggers
 - ✅ **Multi-modal Responses**: Text + interactive visualizations

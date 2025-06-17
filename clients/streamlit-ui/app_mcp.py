@@ -15,7 +15,8 @@ from typing import List, Dict, Any, Optional
 import sys
 import io
 import contextlib
-
+from streamlit_modal import Modal
+import uuid
 # Add dynamic code execution imports
 import subprocess
 import tempfile
@@ -106,8 +107,9 @@ class SimpleMCPClient:
         except concurrent.futures.TimeoutError:
             return {"error": "Request timed out after 30 seconds"}
         except Exception as e:
-            return {"error": f"Execution error: {str(e)}"}    
-    def rag_query(self, query: str, max_results: int = 5, include_comments: bool = True, chat_history: List[Dict[str, str]] = None) -> Dict[str, Any]:
+            return {"error": f"Execution error: {str(e)}"}
+    
+    def rag_query(self, query: str, max_results: int = 5, chat_history: List[Dict[str, str]] = None) -> Dict[str, Any]:
         """Query the RAG server with chat history support"""
         # Convert chat history to JSON string if provided
         history_json = ""
@@ -123,7 +125,6 @@ class SimpleMCPClient:
             {
                 "query": query,
                 "max_results": max_results,
-                "include_comments": include_comments,
                 "chat_history": history_json
             }
         )
@@ -282,32 +283,50 @@ def get_client():
     return None
 
 def check_server_status():
-    """Check the status of MCP servers using official MCP Python SDK client"""
+    """Check the status of MCP servers using official MCP Python SDK client - cached for performance"""
     if not client:
         return {
             "status": "no_client",
             "message": "MCP client not available. Check if MCP Python SDK library is installed."
         }
     
+    # Use session state to cache server status for 5 minutes
+    cache_duration = 300  # 5 minutes in seconds
+    current_time = datetime.now().timestamp()
+    
+    if "server_status_cache" in st.session_state:
+        cache_time = st.session_state.server_status_cache.get("timestamp", 0)
+        if current_time - cache_time < cache_duration:
+            return st.session_state.server_status_cache["status"]
+    
+    # Check server status
     try:
-        # Test RAG server with a simple health check
+        # Quick health check on just one server to avoid multiple slow checks
         result = client.check_server_health('rag')
         #print(f"RAG Server Health Check: {result}")
         if "error" in result:
-            return {
+            status = {
                 "status": "disconnected", 
                 "message": f"MCP servers not responding: {result['error']}. Please start with: python start_mcp_servers.py"
             }
-        
-        return {
-            "status": "connected",
-            "message": "Connected to MCP servers successfully"
-        }
+        else:
+            status = {
+                "status": "connected",
+                "message": "Connected to MCP servers successfully"
+            }
     except Exception as e:
-        return {
+        status = {
             "status": "error",
             "message": f"Error connecting to MCP servers: {str(e)}. Start with: python start_mcp_servers.py"
         }
+    
+    # Cache the result
+    st.session_state.server_status_cache = {
+        "status": status,
+        "timestamp": current_time
+    }
+    
+    return status
 
 client = get_client()
 
@@ -364,14 +383,28 @@ st.markdown("""
         border-radius: 10px;
         margin: 0.5rem 0;
         box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    }
-    .chart-container {
+    }    .chart-container {
         background: white;
         padding: 1rem;
         border-radius: 10px;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         margin: 0.5rem 0;
     }
+    
+    .chat-message {
+        padding: 1rem;
+        border-radius: 8px;
+        margin: 0.5rem 0;
+    }
+    .user-message {
+        background-color: #e3f2fd;
+        border-left: 4px solid #2196f3;
+    }
+    .assistant-message {
+        background-color: #f3e5f5;
+        border-left: 4px solid #9c27b0;
+    }
+    
     /* Enhanced dataframe styling */
     .dataframe {
         border-radius: 10px;
@@ -427,7 +460,7 @@ def main():
             **Alternative - Start individual servers:**
             ```bash
             # Terminal 1 - Main RAG Server
-            cd mcp-server
+            cd mcp-rag
             python -m fastmcp run main.py --port 8000
             
             # Terminal 2 - Web Search Server  
@@ -455,7 +488,7 @@ def main():
             **Alternative - Start individual servers:**
             ```bash
             # Terminal 1 - Main RAG Server
-            cd mcp-server
+            cd mcp-rag
             python -m fastmcp run main.py --port 8000
             
             # Terminal 2 - Web Search Server  
@@ -470,376 +503,329 @@ def main():
     else:
         st.warning(f"⚠️ {server_status['message']} - Using sample data")
     
-    
       # Sidebar navigation
     with st.sidebar:
         st.header("Navigation")
         page = st.radio(
             "Select Page",
-            ["Dashboard", "RAG Assistant", "Search Events", "Comments & Q&A", "Web Research"]
-        )        # Server Status Sidebar
+            ["Dashboard", "RAG Assistant", "Search Events", "Process Workflow", "Analytics", "Administrator"]
+        )# Server Status Sidebar
         st.header("🖥️ Server Status")
-        if client:
-            # Test individual server components using official MCP client
-            col1, col2 = st.columns([3, 1])
+        
+        # Use cached status instead of checking each server individually
+        cached_status = check_server_status()
+        
+        if cached_status["status"] == "connected":
+            st.success("🟢 All servers online")
             
-            with col1:
-                st.write("**RAG Server**")
-            with col2:
-                try:
-                    result = client.check_server_health('rag')
-                    if "error" not in result:
-                        st.write("🟢")
-                    else:
-                        st.write("🔴")
-                except:
-                    st.write("🔴")
+            # Show simplified status without additional checks
+            st.write("**RAG Server:** 🟢")
+            st.write("**Web Search:** 🟢") 
+            st.write("**Comments:** 🟢")
             
-            col1, col2 = st.columns([3, 1])
-            with col1:
-                st.write("**Web Search**")
-            with col2:
-                try:
-                    result = client.check_server_health('websearch')
-                    if "error" not in result:
-                        st.write("🟢")
-                    else:
-                        st.write("🔴")
-                except:
-                    st.write("🔴")
-                    
-            col1, col2 = st.columns([3, 1])
-            with col1:
-                st.write("**Comments**")
-            with col2:
-                try:
-                    result = client.check_server_health('comments')
-                    if "error" not in result:
-                        st.write("🟢")
-                    else:
-                        st.write("🔴")
-                except:
-                    st.write("🔴")
+        elif cached_status["status"] == "disconnected":
+            st.error("🔴 Servers offline")
+            st.write("**RAG Server:** 🔴")
+            st.write("**Web Search:** 🔴")
+            st.write("**Comments:** 🔴")
+            
+        elif cached_status["status"] == "error":
+            st.warning("⚠️ Connection issues")
+            st.write("**RAG Server:** ⚠️")
+            st.write("**Web Search:** ⚠️")
+            st.write("**Comments:** ⚠️")
+            
         else:
             st.write("❌ Client not available")
             st.write("Start servers first!")
-    
-    # Route to selected page
+            
+        # Add refresh button for manual status update
+        if st.button("🔄 Refresh Status"):
+            if "server_status_cache" in st.session_state:
+                del st.session_state.server_status_cache
+            st.rerun()
+      # Route to selected page
     if page == "Dashboard":
         show_dashboard()
     elif page == "RAG Assistant":
         show_rag_assistant()
     elif page == "Search Events":
         show_search_events()
-    elif page == "Comments & Q&A":
-        show_comments_qa()
-    elif page == "Web Research":
-        show_web_research()
-
-def show_dashboard():
-    """Display main dashboard with enhanced visualizations"""
-    st.header("📊 Dashboard Overview")
-    
-    try:
-        if client:
-            # Fetch recent events using MCP client
-            events_response = client.search_corporate_actions(limit=10)
-            if "error" not in events_response:
-                events = events_response.get("events", [])
-                st.success("✅ Connected to MCP servers - showing live data")
-            else:
-                events = get_sample_events()
-                st.info("📊 Using sample data - MCP search failed")
-        else:
-            events = get_sample_events()
-            st.info("📊 Using sample data - MCP client not available")
-            
-        # Normalize event data to handle different structures
-        events = normalize_event_data(events)
-        
-        # Calculate metrics
-        total_events = len(events)
-        active_events = len([e for e in events if e.get("status") == "confirmed"])
-        upcoming_events = len([e for e in events if e.get("status") == "announced"])
-        pending_events = len([e for e in events if e.get("status") == "pending"])
-        
-        # Display metrics with color indicators
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric("📈 Total Events", total_events)
-        with col2:
-            st.metric("✅ Active Events", active_events, delta=None, delta_color="normal")
-        with col3:
-            st.metric("📅 Upcoming", upcoming_events, delta=None, delta_color="normal")
-        with col4:
-            st.metric("⏳ Pending", pending_events, delta=None, delta_color="normal")
-        
-        # Create visualizations
-        if events:
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                # Status distribution pie chart
-                st.subheader("📊 Event Status Distribution")
-                status_counts = {}
-                for event in events:
-                    status = event.get("status", "Unknown")
-                    status_counts[status] = status_counts.get(status, 0) + 1
-                
-                if status_counts:
-                    fig_pie = px.pie(
-                        values=list(status_counts.values()),
-                        names=list(status_counts.keys()),
-                        title="Events by Status",
-                        color_discrete_map={
-                            'confirmed': '#28a745',    # Green
-                            'announced': '#ffc107',    # Yellow
-                            'pending': '#dc3545',      # Red
-                            'processed': '#17a2b8',    # Blue
-                            'cancelled': '#6c757d'     # Gray
-                        }
-                    )
-                    fig_pie.update_traces(textposition='inside', textinfo='percent+label')
-                    st.plotly_chart(fig_pie, use_container_width=True)
-            
-            with col2:
-                # Event type distribution
-                st.subheader("🏢 Event Type Distribution")
-                type_counts = {}
-                for event in events:
-                    event_type = event.get("event_type", "Unknown")
-                    type_counts[event_type] = type_counts.get(event_type, 0) + 1
-                
-                if type_counts:
-                    fig_bar = px.bar(
-                        x=list(type_counts.keys()),
-                        y=list(type_counts.values()),
-                        title="Events by Type",
-                        color=list(type_counts.values()),
-                        color_continuous_scale="viridis"
-                    )
-                    fig_bar.update_layout(xaxis_title="Event Type", yaxis_title="Count")
-                    st.plotly_chart(fig_bar, use_container_width=True)
-        
-        # Recent events table with color-coded status
-        st.subheader("📋 Recent Corporate Actions")
-        if events:
-            # Create a styled dataframe
-            df = pd.DataFrame(events)
-            
-            # Format the dataframe for display with normalized column names
-            display_columns = ["company_name", "symbol", "event_type", "status", "announcement_date"]
-            available_columns = [col for col in display_columns if col in df.columns]
-            
-            if available_columns:
-                display_df = df[available_columns].copy()
-                
-                # Add status styling function
-                def color_status(val):
-                    if val == 'confirmed':
-                        return 'background-color: #d4edda; color: #155724; font-weight: bold;'
-                    elif val == 'announced':
-                        return 'background-color: #fff3cd; color: #856404; font-weight: bold;'
-                    elif val == 'pending':
-                        return 'background-color: #f8d7da; color: #721c24; font-weight: bold;'
-                    elif val == 'processed':
-                        return 'background-color: #d1ecf1; color: #0c5460; font-weight: bold;'
-                    else:
-                        return 'background-color: #e2e3e5; color: #383d41; font-weight: bold;'
-                
-                # Rename columns for better display
-                column_mapping = {
-                    "company_name": "Company",
-                    "symbol": "Symbol", 
-                    "event_type": "Event Type",
-                    "status": "Status",
-                    "announcement_date": "Announced"
-                }
-                display_df = display_df.rename(columns=column_mapping)
-                
-                # Apply styling
-                styled_df = display_df.style.applymap(color_status, subset=['Status'])
-                st.dataframe(styled_df, use_container_width=True)
-            else:
-                st.dataframe(df, use_container_width=True)
-                
-            # Additional insights
-            st.subheader("🔍 Quick Insights")
-            
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                # Most active companies
-                company_counts = {}
-                for event in events:
-                    company = event.get("company_name", "Unknown")
-                    company_counts[company] = company_counts.get(company, 0) + 1
-                
-                if company_counts:
-                    most_active = max(company_counts, key=company_counts.get)
-                    st.metric("🏆 Most Active Company", most_active, f"{company_counts[most_active]} events")
-            
-            with col2:
-                # Most common event type
-                if type_counts:
-                    most_common_type = max(type_counts, key=type_counts.get)
-                    st.metric("📈 Most Common Event", most_common_type.replace('_', ' ').title(), f"{type_counts[most_common_type]} events")
-            
-            with col3:
-                # Event timeline
-                recent_events = len([e for e in events if e.get("announcement_date", "").startswith("2024")])
-                st.metric("📅 Recent Events (2024)", recent_events, "events")
-                
-        else:
-            st.info("No recent events found")
-            
-    except Exception as e:
-        st.error(f"Error loading dashboard: {str(e)}")
-        show_sample_dashboard()
+    elif page == "Process Workflow":
+        show_process_workflow()
+    elif page == "Analytics":
+        show_analytics_page()  # Moved old dashboard content here
+    elif page == "Administrator":
+        show_administrator_page()  
 
 def show_rag_assistant():
-    """Display RAG assistant interface with enhanced chat history and visualization support"""
+    """Display RAG assistant interface with enhanced chat history and both general and subscription-based RAG"""
     st.header("🤖 RAG Assistant (MCP)")
-    st.markdown("Ask questions about corporate actions using natural language")
+    st.markdown("Ask questions about corporate actions using advanced AI-powered search and analysis")
 
-    # Chat interface
+    # RAG Query Mode Selection
+    col1, col2 = st.columns(2)
+    with col1:
+        rag_mode = st.radio(
+            "Query Mode:",
+            ["General RAG Search", "Subscription-Based Search"],
+            help="General RAG searches all corporate actions data. Subscription-based limits to your symbols."
+        )
+    
+    with col2:
+        # Display current subscriptions if available
+        user_subscriptions = st.session_state.get('user_subscriptions', [])
+        if user_subscriptions:
+            st.info(f"📈 **Your subscriptions:** {', '.join(user_subscriptions)}")
+        else:
+            st.warning("⚠️ No subscriptions - only General RAG mode available")
+            if rag_mode == "Subscription-Based Search":
+                st.info("💡 Go to Dashboard to subscribe to symbols for subscription-based search")
+    
+    # Force general mode if no subscriptions
+    if not user_subscriptions and rag_mode == "Subscription-Based Search":
+        rag_mode = "General RAG Search"
+        st.info("🔄 Switched to General RAG mode (no subscriptions found)")
+
+    # Initialize chat history
+    if "rag_chat_history" not in st.session_state:
+        st.session_state.rag_chat_history = []
+    
+    # Initialize messages for backward compatibility
     if "messages" not in st.session_state:
-        st.session_state.messages = []    # Display chat messages
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
-            
-            # Regenerate visualization if it was shown before
-            if message.get("had_visualization") and message.get("sources"):
-                with st.container():
-                    st.caption("🔄 Regenerated Visualization")
-                    fig = generate_dynamic_visualization(
-                        message["sources"], 
-                        message["content"] if message["role"] == "user" else "visualization", 
-                        message.get("visualization_suggestions", {})
-                    )
-                    if fig:
-                        st.plotly_chart(fig, use_container_width=True, key=f"viz_{hash(str(message))}")
-            
-            # Show visualization suggestions if available
-            elif message.get("visualization_suggestions"):
-                with st.expander("📊 Visualization Suggestions"):
-                    suggestions = message["visualization_suggestions"]
-                    recommended = suggestions.get("recommended_charts", [])
-                    data_available = suggestions.get("data_available", [])
-                    
-                    if recommended:
-                        st.write("**Recommended visualizations for this data:**")
-                        for chart_type in recommended:
-                            chart_name = chart_type.replace("_", " ").title()
-                            st.write(f"• {chart_name}")
-                    
-                    if data_available:
-                        st.write("**Available data dimensions:**")
-                        for data_type in data_available:
-                            data_name = data_type.replace("_", " ").title()
-                            st.write(f"• {data_name}")
-            
-            # Show sources
-            if message.get("sources"):
-                with st.expander("📋 Sources"):
-                    for source in message["sources"]:
-                        st.json(source)
+        st.session_state.messages = []
 
-    # Chat input
-    if prompt := st.chat_input("Ask about corporate actions"):
-        # Add user message
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
-
-        # Get RAG response with chat history
-        with st.chat_message("assistant"):
-            with st.spinner("Searching corporate actions data..."):
-                try:
-                    if client:
-                        # Prepare chat history (last 5 messages for context)
-                        chat_history = st.session_state.messages[-10:] if len(st.session_state.messages) > 10 else st.session_state.messages
-                        
-                        response = client.rag_query(
-                            prompt, 
-                            max_results=5, 
-                            include_comments=True,
-                            chat_history=chat_history                        )
-                        
-                        if "error" not in response:
-                            # Parse JSON response
-                            if isinstance(response, str):
-                                rag_data = json.loads(response)
-                            else:
-                                rag_data = response
-                                
-                            answer = rag_data.get("answer", "I couldn't find relevant information.")
-                            sources = rag_data.get("sources", [])
-                            confidence = rag_data.get("confidence_score", 0.0)
-                            requires_viz = rag_data.get("requires_visualization", False)
-                            viz_suggestions = rag_data.get("visualization_suggestions", {})
-                            
-                            st.markdown(answer)
-                            
-                            # Generate dynamic visualization if requested
-                            if requires_viz and sources:
-                                st.subheader("📊 Generated Visualization")
-                                
-                                with st.spinner("Generating visualization..."):
-                                    # Generate dynamic chart based on the data and query
-                                    fig = generate_dynamic_visualization(sources, prompt, viz_suggestions)
-                                    
-                                    if fig:
-                                        st.plotly_chart(fig, use_container_width=True)
-                                        st.success("✅ Visualization generated successfully!")
-                                    else:
-                                        st.warning("⚠️ Could not generate visualization for this data. You can check the Dashboard or Search sections for more visualization options.")
-                                        
-                                        # Show alternative visualization suggestions
-                                        if viz_suggestions.get("recommended_charts"):
-                                            with st.expander("💡 Visualization Suggestions"):
-                                                st.write("**Available visualizations for this data:**")
-                                                for chart_type in viz_suggestions["recommended_charts"]:
-                                                    chart_name = chart_type.replace("_", " ").title()
-                                                    st.write(f"• {chart_name}")
-                                                st.info("Visit the Dashboard or Search Events sections to see these visualizations!")
-                            
-                            elif requires_viz and not sources:
-                                st.info("🎨 I detected you're asking for visualizations, but no data was found to visualize. Try searching for specific events or companies first!")
-                            
-                            if sources:
-                                with st.expander(f"📋 Sources (Confidence: {confidence:.1%})"):
-                                    for i, source in enumerate(sources):
-                                        st.json(source)
-                            
-                            # Build assistant message with all metadata
-                            assistant_message = {
-                                "role": "assistant",
-                                "content": answer,
-                                "sources": sources,
-                                "confidence": confidence,
-                                "requires_visualization": requires_viz,
-                                "had_visualization": requires_viz and sources and len(sources) > 0
-                            }
-                            
-                            if viz_suggestions:
-                                assistant_message["visualization_suggestions"] = viz_suggestions
-                            
-                            st.session_state.messages.append(assistant_message)
-                        else:
-                            error_msg = f"Error: {response.get('error', 'Unknown error')}"
-                            st.error(error_msg)
-                            st.session_state.messages.append({"role": "assistant", "content": error_msg})
+    # Display chat history with styled messages
+    if st.session_state.rag_chat_history:
+        st.markdown("### 💬 Chat History")
+        
+        for i, msg in enumerate(st.session_state.rag_chat_history):
+            if msg["role"] == "user":
+                st.markdown(f"""
+                <div class="chat-message user-message">
+                    <strong>👤 You:</strong>
+                </div>
+                """, unsafe_allow_html=True)
+                st.markdown(msg["content"])
+            else:
+                st.markdown(f"""
+                <div class="chat-message assistant-message">
+                    <strong>🤖 RAG Assistant:</strong>
+                </div>
+                """, unsafe_allow_html=True)
+                st.markdown(msg["content"])
+                
+                # Show confidence score if available
+                if msg.get("confidence"):
+                    confidence = msg["confidence"]
+                    if confidence > 0.8:
+                        st.success(f"✅ High confidence response ({confidence:.1%})")
+                    elif confidence > 0.6:
+                        st.warning(f"⚠️ Medium confidence response ({confidence:.1%})")
                     else:
-                        error_msg = "MCP client not available. Please check server connection."
-                        st.error(error_msg)
-                        st.session_state.messages.append({"role": "assistant", "content": error_msg})
+                        st.info(f"💡 Lower confidence response ({confidence:.1%})")
+                
+                # Regenerate visualization if it was shown before
+                if msg.get("had_visualization") and msg.get("sources"):
+                    with st.container():
+                        st.caption("🔄 Regenerated Visualization")
+                        fig = generate_dynamic_visualization(
+                            msg["sources"], 
+                            msg["content"] if msg["role"] == "user" else "visualization", 
+                            msg.get("visualization_suggestions", {})
+                        )
+                        if fig:
+                            st.plotly_chart(fig, use_container_width=True, key=f"viz_{i}_{hash(str(msg))}")
+                
+                # Show visualization suggestions if available
+                elif msg.get("visualization_suggestions"):
+                    with st.expander("📊 Visualization Suggestions"):
+                        suggestions = msg["visualization_suggestions"]
+                        recommended = suggestions.get("recommended_charts", [])
+                        data_available = suggestions.get("data_available", [])
                         
-                except Exception as e:
-                    error_msg = f"Error processing query: {str(e)}"
+                        if recommended:
+                            st.write("**Recommended visualizations for this data:**")
+                            for chart_type in recommended:
+                                chart_name = chart_type.replace("_", " ").title()
+                                st.write(f"• {chart_name}")
+                        
+                        if data_available:
+                            st.write("**Available data dimensions:**")
+                            for data_type in data_available:
+                                data_name = data_type.replace("_", " ").title()
+                                st.write(f"• {data_name}")
+                
+                # Show sources
+                if msg.get("sources"):
+                    with st.expander("📋 Sources"):
+                        for source in msg["sources"]:
+                            st.json(source)
+        
+        # Clear chat history button
+        if st.button("🗑️ Clear Chat History"):
+            st.session_state.rag_chat_history = []
+            st.session_state.messages = []  # Clear old messages too
+            st.rerun()
+    
+    else:
+        st.info("💡 Start a conversation by asking about corporate actions below!")
+          # Sample questions        st.markdown("### 💡 Sample Questions You Can Ask:")
+        
+        # Generate sample questions based on mode and user subscriptions
+        user_symbols = st.session_state.get('user_subscriptions', [])
+        
+        if rag_mode == "General RAG Search":
+            sample_questions = [
+                "What dividend announcements are available for technology companies?",
+                "Show me all recent stock splits and their ratios",
+                "Find merger and acquisition events from the last quarter",
+                "Create a chart showing event type distribution across all companies",
+                "What are the highest dividend yields announced recently?",
+                "Analyze trends in corporate action announcements"
+            ]
+        else:
+            sample_questions = [
+                f"What are the recent dividend announcements for {user_symbols[0] if user_symbols else 'my subscribed symbols'}?",
+                f"Show me all stock splits for {', '.join(user_symbols[:2]) if len(user_symbols) >= 2 else 'my subscribed symbols'}", 
+                "Which of my subscribed companies have the most corporate actions?",
+                "Create a chart showing event types for my subscribed symbols",
+                "What are the upcoming ex-dividend dates for my subscriptions?",
+                f"Analyze corporate action trends for {', '.join(user_symbols) if user_symbols else 'my symbols'}"
+            ]
+        
+        for question in sample_questions:
+            if st.button(f"📝 {question}", key=f"sample_rag_{question}"):
+                st.session_state.rag_chat_history.append({"role": "user", "content": question})
+                st.rerun()    # Chat input
+    user_input = st.chat_input("Ask about corporate actions, request analysis, or search for specific events...")
+    
+    if user_input:
+        # Add user message to history
+        st.session_state.rag_chat_history.append({"role": "user", "content": user_input})
+        
+        # Get RAG response with chat history
+        with st.spinner("🤖 RAG Assistant thinking..."):
+            try:                
+                if client:
+                    # Prepare enhanced chat history (last 6 messages for context)
+                    chat_history_for_context = []
+                    recent_messages = st.session_state.rag_chat_history[-6:] if len(st.session_state.rag_chat_history) > 6 else st.session_state.rag_chat_history
+                    
+                    for msg in recent_messages:
+                        if msg["role"] == "user":
+                            chat_history_for_context.append({
+                                "role": "user",
+                                "content": msg["content"]
+                            })
+                        elif msg["role"] == "assistant":
+                            # Include sources information in assistant context if available
+                            content = msg["content"]
+                            if msg.get("sources"):
+                                content += f"\n\n[Previous sources: {len(msg['sources'])} corporate action events]"
+                            chat_history_for_context.append({
+                                "role": "assistant", 
+                                "content": content
+                            })
+                      # Choose the appropriate RAG tool based on mode
+                    if rag_mode == "General RAG Search":
+                        # Use general RAG query that searches all corporate actions
+                        response = client.rag_query(
+                            query=user_input,
+                            max_results=5,
+                            chat_history=chat_history_for_context
+                        )
+                    else:
+                        # Use subscription-based RAG query
+                        response = client._call_tool(
+                            MCP_SERVERS["rag"],
+                            "rag_query_subscribed",
+                            {
+                                "query": user_input,
+                                "user_id": st.session_state.get('user_id', 'user_001'),
+                                "subscribed_symbols": st.session_state.get('user_subscriptions', []),
+                                "max_results": 5,                                "chat_history": json.dumps(chat_history_for_context) if chat_history_for_context else ""
+                            }
+                        )
+                    
+                    if isinstance(response, str):
+                        rag_data = json.loads(response)
+                    else:
+                        rag_data = response
+                    
+                    # Handle errors differently based on mode
+                    if "error" in rag_data:
+                        error_msg = rag_data["error"]
+                        suggestion = rag_data.get("suggestion", "")
+                        
+                        st.error(f"🚫 {error_msg}")
+                        if suggestion:
+                            st.info(f"💡 {suggestion}")
+                        
+                        # Show subscription-specific error details only for subscription mode
+                        if rag_mode == "Subscription-Based Search" and "unsubscribed_symbols" in rag_data:
+                            st.warning(f"❌ You asked about: {', '.join(rag_data['unsubscribed_symbols'])}")
+                            st.success(f"✅ You can ask about: {', '.join(rag_data['subscribed_symbols'])}")
+                        
+                        # Add error to chat history
+                        st.session_state.rag_chat_history.append({
+                            "role": "assistant", 
+                            "content": f"❌ {error_msg}\n\n💡 {suggestion}" if suggestion else f"❌ {error_msg}"
+                        })
+                        st.rerun()
+                        return
+                    
+                    # Process successful response
+                    answer = rag_data.get("answer", "I couldn't find relevant information.")
+                    sources = rag_data.get("sources", [])
+                    confidence = rag_data.get("confidence_score", 0.8)
+                    data_source = rag_data.get("data_source", "unknown")
+                    total_results = rag_data.get("total_results", len(sources))
+                    query_intent = rag_data.get("query_intent", "information_request")
+                    requires_visualization = rag_data.get("requires_visualization", False)
+                    visualization_suggestions = rag_data.get("visualization_suggestions", {})
+                    
+                    # Add enhanced data source info to answer based on mode and data source
+                    mode_info = f"[{rag_mode}]"
+                    if data_source == "vector_search":
+                        answer += f"\n\n📊 *{mode_info} AI Search Vector DB ({total_results} events analyzed)*"
+                    elif data_source == "cosmosdb":
+                        answer += f"\n\n📊 *{mode_info} CosmosDB ({total_results} events analyzed)*"
+                    elif data_source == "keyword_search_fallback":
+                        answer += f"\n\n📊 *{mode_info} Keyword search fallback ({total_results} events analyzed)*"
+                    else:
+                        answer += f"\n\n📊 *{mode_info} {data_source} ({total_results} events analyzed)*"
+                      # Build assistant message with enhanced metadata
+                    assistant_message = {
+                        "role": "assistant",
+                        "content": answer,
+                        "sources": sources,
+                        "confidence": confidence,
+                        "data_source": data_source,
+                        "query_intent": query_intent,
+                        "requires_visualization": requires_visualization,
+                        "visualization_suggestions": visualization_suggestions,
+                        "rag_mode": rag_mode
+                    }
+                    
+                    st.session_state.rag_chat_history.append(assistant_message)
+                    
+                    # Also add to old messages for backward compatibility
+                    st.session_state.messages.append({"role": "user", "content": user_input})
+                    st.session_state.messages.append(assistant_message)
+                    
+                    st.rerun()
+                else:
+                    error_msg = "MCP client not available. Please check server connection."
                     st.error(error_msg)
-                    st.session_state.messages.append({"role": "assistant", "content": error_msg})
+                    st.session_state.rag_chat_history.append({"role": "assistant", "content": error_msg})
+                    st.rerun()
+                    
+            except Exception as e:
+                error_msg = f"Error processing query: {str(e)}"
+                st.error(error_msg)
+                st.session_state.rag_chat_history.append({"role": "assistant", "content": error_msg})
+                st.rerun()
 
 def show_search_events():
     """Display event search interface"""
@@ -855,8 +841,8 @@ def show_search_events():
         
         with col2:
             status = st.selectbox("Status", ["", "announced", "confirmed", "processed", "cancelled"])
-            date_from = st.date_input("From Date", value=date.today() - timedelta(days=30))
-            date_to = st.date_input("To Date", value=date.today())
+            #date_from = st.date_input("From Date", value=date.today() - timedelta(days=30))
+            #date_to = st.date_input("To Date", value=date.today())
         
         limit = st.slider("Max Results", 1, 50, 10)
         submit_button = st.form_submit_button("Search")
@@ -868,10 +854,8 @@ def show_search_events():
                 search_params = {
                     "search_text": search_text,
                     "event_type": event_type,
-                    "company_name": company_name,
-                    "status": status,
-                    "date_from": date_from.isoformat() if date_from else "",
-                    "date_to": date_to.isoformat() if date_to else "",
+                    "symbols": company_name,
+                    "status_filter": status,
                     "limit": limit
                 }
                 
@@ -1073,99 +1057,6 @@ def show_search_events():
         except Exception as e:
             st.error(f"Error executing search: {str(e)}")
 
-def show_comments_qa():
-    """Display comments and Q&A interface"""
-    st.header("💬 Comments & Q&A (MCP)")
-    
-    # Event selector
-    event_id = st.selectbox(
-        "Select Event",
-        ["AAPL_DIV_2024_Q1", "MSFT_SPLIT_2024", "TSLA_DIV_2024_SPECIAL"],
-        help="Select an event to view or add comments"
-    )
-    
-    if event_id:
-        # Display existing comments
-        st.subheader(f"Comments for {event_id}")
-        
-        try:
-            if client:
-                response = client.get_event_comments(event_id, limit=50)
-                
-                if "error" not in response:
-                    if isinstance(response, str):
-                        comments_data = json.loads(response)
-                    else:
-                        comments_data = response
-                        
-                    comments = comments_data.get("comments", [])
-                    
-                    if comments:
-                        for comment in comments:
-                            comment_type = comment.get("comment_type", "general")
-                            icon = {"question": "❓", "analysis": "📊", "general": "💭"}.get(comment_type, "💭")
-                            
-                            with st.container():
-                                st.markdown(f"""
-                                <div style="border-left: 3px solid #007bff; padding-left: 1rem; margin: 1rem 0;">
-                                    <strong>{icon} {comment.get('user_name', 'Anonymous')}</strong> 
-                                    <small>- {comment_type}</small><br>
-                                    <em>{comment.get('created_at', 'Unknown time')}</em><br>
-                                    {comment.get('comment_text', 'No content')}
-                                </div>
-                                """, unsafe_allow_html=True)
-                    else:
-                        st.info("No comments yet for this event")
-                else:
-                    st.error(f"Failed to load comments: {response.get('error', 'Unknown error')}")
-            else:
-                st.warning("MCP client not available. Cannot load comments.")
-                
-        except Exception as e:
-            st.error(f"Error loading comments: {str(e)}")
-        
-        st.markdown("---")
-        
-        # Add new comment form
-        st.subheader("Add Comment")
-        
-        with st.form("comment_form"):
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                user_name = st.text_input("Your Name", value="Demo User")
-            
-            with col2:
-                comment_type = st.selectbox("Comment Type", ["general", "question", "analysis", "clarification"])
-            
-            comment_text = st.text_area("Comment Content", height=100)
-            
-            if st.form_submit_button("Submit Comment"):
-                if comment_text and user_name:
-                    try:
-                        if client:
-                            response = client.add_comment(event_id, user_name, comment_text, comment_type)
-                            
-                            if "error" not in response:
-                                if isinstance(response, str):
-                                    result = json.loads(response)
-                                else:
-                                    result = response
-                                    
-                                if result.get("success"):
-                                    st.success("Comment added successfully!")
-                                    st.rerun()
-                                else:
-                                    st.error(f"Failed to add comment: {result.get('error', 'Unknown error')}")
-                            else:
-                                st.error(f"Error: {response.get('error', 'Unknown error')}")
-                        else:
-                            st.warning("MCP client not available. Cannot add comment.")
-                    except Exception as e:
-                        st.error(f"Error adding comment: {str(e)}")
-                else:
-                    st.error("Please fill in all required fields")
-
 def show_web_research():
     """Display web research interface"""
     st.header("🌐 Web Research (MCP)")
@@ -1271,43 +1162,11 @@ def show_web_research():
                 except Exception as e:
                     st.error(f"Error: {str(e)}")
 
-def get_sample_events():
-    """Get sample events for demo"""
-    return [
-        {
-            "event_id": "AAPL_DIV_2024_Q1",
-            "company_name": "Apple Inc.",
-            "symbol": "AAPL",
-            "event_type": "dividend",
-            "description": "Quarterly cash dividend",
-            "status": "confirmed",
-            "announcement_date": "2024-01-25"
-        },
-        {
-            "event_id": "MSFT_SPLIT_2024",
-            "company_name": "Microsoft Corporation",
-            "symbol": "MSFT",
-            "event_type": "stock_split",
-            "description": "2-for-1 stock split",
-            "status": "announced",
-            "announcement_date": "2024-01-15"
-        },
-        {
-            "event_id": "TSLA_DIV_2024_SPECIAL",
-            "company_name": "Tesla Inc.",
-            "symbol": "TSLA",
-            "event_type": "special_dividend",
-            "description": "Special cash dividend distribution",
-            "status": "confirmed",
-            "announcement_date": "2024-02-01"
-        }
-    ]
-
 def show_sample_dashboard():
     """Show enhanced sample dashboard when MCP servers are unavailable"""
     st.info("🔧 Showing sample data - MCP servers may be offline")
     
-    events = get_sample_events()
+    events = get_sample_upcoming_events()
     
     # Display sample metrics with enhanced styling
     col1, col2, col3, col4 = st.columns(4)
@@ -1385,7 +1244,7 @@ def show_sample_dashboard():
 def show_sample_search_results():
     """Show sample search results"""
     st.info("Sample search results:")
-    events = get_sample_events()
+    events = get_sample_upcoming_events()
     
     for event in events:
         with st.expander(f"{event['event_type']} - {event['company_name']}"):
@@ -1669,8 +1528,1017 @@ def execute_dynamic_code(code: str, data: Dict[str, Any]) -> Any:
         finally:
             sys.stdout = old_stdout
             
-    except Exception as e:
-        return f"Code execution error: {str(e)}"
+    except Exception as e:        return f"Code execution error: {str(e)}"
+
+def show_dashboard():
+    """Display new dashboard focused on upcoming actions and subscriptions"""
+    st.header("📊 Corporate Actions Dashboard")
+    
+    # Initialize session state for user subscriptions if not exists
+    if "user_subscriptions" not in st.session_state:
+        st.session_state.user_subscriptions = []
+    if "user_role" not in st.session_state:
+        st.session_state.user_role = "CONSUMER"
+    if "user_id" not in st.session_state:
+        st.session_state.user_id = "user_001"
+    if "user_name" not in st.session_state:
+        st.session_state.user_name = "Demo User"
+    if "subscriptions_loaded" not in st.session_state:
+        st.session_state.subscriptions_loaded = False
+    
+    # Load subscriptions from database on first load
+    if not st.session_state.subscriptions_loaded and client:
+        try:
+            result = client._call_tool(
+                MCP_SERVERS["rag"], 
+                "get_subscription_tool",
+                {"user_id": st.session_state.user_id}
+            )
+            
+            if isinstance(result, str):
+                result = json.loads(result)
+            
+            if isinstance(result, dict) and result.get("subscription"):
+                subscription = result["subscription"]
+                if subscription and subscription.get("symbols"):
+                    st.session_state.user_subscriptions = subscription["symbols"]
+                    st.info(f"📊 Loaded {len(st.session_state.user_subscriptions)} subscriptions from database")
+            
+            st.session_state.subscriptions_loaded = True
+        except Exception as e:
+            st.warning(f"⚠️ Could not load subscriptions from database: {str(e)}")
+            st.session_state.subscriptions_loaded = True
+    
+    # User role selector
+    col1, col2 = st.columns([3, 1])
+    with col2:
+        st.session_state.user_role = st.selectbox(
+            "👤 User Role", 
+            ["CONSUMER", "ADMINISTRATOR"], 
+            index=0 if st.session_state.user_role == "CONSUMER" else 1
+        )
+    
+    with col1:
+        st.markdown("### 🚨 Welcome to the Enhanced Corporate Actions Process Workflow")
+    
+    # Subscription Management Section
+    st.markdown("---")
+    st.subheader("📈 My Subscriptions")
+      # Subscription input
+    col1, col2, col3 = st.columns([3, 1, 1])
+    with col1:
+        new_symbols = st.text_input(
+            "Add Symbols to Subscribe", 
+            placeholder="AAPL,MSFT,GOOGL"
+        )
+    with col2:
+        if st.button("➕ Subscribe"):
+            if new_symbols:
+                symbols = [s.strip().upper() for s in new_symbols.split(",")]
+                # Update session state
+                for symbol in symbols:
+                    if symbol not in st.session_state.user_subscriptions:
+                        st.session_state.user_subscriptions.append(symbol)
+                
+                # Persist to database via MCP tool
+                if client:
+                    try:
+                        result = client._call_tool(
+                            MCP_SERVERS["rag"], 
+                            "save_subscription_tool",
+                            {
+                                "user_id": st.session_state.user_id,
+                                "user_name": st.session_state.user_name,
+                                "organization": "Streamlit User",
+                                "symbols": ",".join(st.session_state.user_subscriptions),
+                                "event_types": "DIVIDEND,STOCK_SPLIT,MERGER,SPIN_OFF"
+                            }
+                        )
+                        
+                        if isinstance(result, dict) and result.get("success", False):
+                            st.success(f"✅ Subscribed to: {', '.join(symbols)} (Saved to database)")
+                        else:
+                            st.warning(f"✅ Subscribed to: {', '.join(symbols)} (Session only - database unavailable)")
+                    except Exception as e:
+                        st.warning(f"✅ Subscribed to: {', '.join(symbols)} (Session only - {str(e)})")
+                else:
+                    st.success(f"✅ Subscribed to: {', '.join(symbols)} (Session only)")
+                st.rerun()
+    
+    # Display current subscriptions
+    if st.session_state.user_subscriptions:
+        st.write("**Current Subscriptions:**")
+        subscription_cols = st.columns(min(len(st.session_state.user_subscriptions), 5))
+        for i, symbol in enumerate(st.session_state.user_subscriptions):
+            with subscription_cols[i % 5]:
+                if st.button(f"❌ {symbol}", key=f"unsub_{symbol}"):
+                    st.session_state.user_subscriptions.remove(symbol)
+                    
+                    # Persist to database via MCP tool
+                    if client:
+                        try:
+                            result = client._call_tool(
+                                MCP_SERVERS["rag"], 
+                                "save_subscription_tool",
+                                {
+                                    "user_id": st.session_state.user_id,
+                                    "user_name": st.session_state.user_name,
+                                    "organization": "Streamlit User",
+                                    "symbols": ",".join(st.session_state.user_subscriptions),
+                                    "event_types": "DIVIDEND,STOCK_SPLIT,MERGER,SPIN_OFF"
+                                }
+                            )
+                            
+                            if isinstance(result, dict) and result.get("success", False):
+                                st.success(f"🗑️ Unsubscribed from {symbol} (Updated database)")
+                            else:
+                                st.warning(f"🗑️ Unsubscribed from {symbol} (Session only)")
+                        except Exception as e:
+                            st.warning(f"🗑️ Unsubscribed from {symbol} (Session only - {str(e)})")
+                    else:
+                        st.success(f"🗑️ Unsubscribed from {symbol} (Session only)")
+                    st.rerun()
+    else:
+        st.info("📝 No subscriptions yet. Add some symbols above to get started!")
+    
+    st.markdown("---")
+    
+    # Upcoming Actions Section    st.subheader("🗓️ Upcoming Corporate Actions (Next 7 Days)")
+    
+    # Define today outside try block to avoid scope issues
+    today = datetime.now().date()
+    
+    try:
+        # Fetch upcoming events using MCP tool
+        filtered_events = []
+        if client and st.session_state.user_subscriptions:
+            try:
+                # Use the get_upcoming_events_tool from MCP server
+                result = client._call_tool(
+                    MCP_SERVERS["rag"], 
+                    "get_upcoming_events_tool",
+                    {"user_id": st.session_state.user_id, "days_ahead": 7}
+                )
+                
+                #print(f"🔍 MCP Tool Result: {result}")
+                if isinstance(result, str):
+                    result = json.loads(result)
+                    mcp_events = result.get("upcoming_events", [])
+                elif isinstance(result, dict) and result.get("upcoming_events"):
+                    mcp_events = result["upcoming_events"]
+                elif result.get("error"):
+                    st.warning(f"⚠️ Error from MCP server: {result['error']}")
+                else:
+                    st.info("📊 No upcoming events found for your subscriptions")
+
+                # Convert MCP events to the format expected by display logic
+                for event in mcp_events:
+                    # Extract event date for sorting
+                    event_date = None
+                    for date_field in ['ex_date', 'effective_date', 'record_date', 'payable_date']:
+                        if event.get(date_field):
+                            try:
+                                if isinstance(event[date_field], str):
+                                    event_date = datetime.strptime(event[date_field], '%Y-%m-%dT%H:%M:%SZ').date()
+                                else:
+                                    event_date = event[date_field]
+                                break
+                            except:
+                                continue
+                    
+                    if event_date:
+                        event['event_date'] = event_date
+                        filtered_events.append(event)
+                    
+            except Exception as e:
+                st.error(f"⚠️ Could not fetch upcoming events from MCP server: {str(e)}")
+                  # If no MCP data, use sample data as fallback
+
+        #print(f"🔍 Filtered Events: {filtered_events}")
+        if not filtered_events:
+            st.info("📊 Using sample data.")
+            upcoming_events = get_sample_upcoming_events(st.session_state.user_subscriptions)
+            upcoming_events = normalize_event_data(upcoming_events)
+            
+            # Filter for next 7 days and subscribed symbols (existing logic)
+            week_from_now = today + timedelta(days=7)
+            
+            for event in upcoming_events:
+                # Check if event is for subscribed symbols
+                symbol = event.get('symbol', event.get('company_name', 'Unknown')).replace(' Corporation', '').replace(' Inc.', '').upper()
+                
+                # Extract symbol from company name if needed
+                if symbol in ['UNKNOWN', 'APPLE', 'MICROSOFT', 'ALPHABET', 'TESLA', 'AMAZON']:
+                    symbol_map = {
+                        'APPLE': 'AAPL',
+                        'MICROSOFT': 'MSFT', 
+                        'ALPHABET': 'GOOGL',
+                        'TESLA': 'TSLA',
+                        'AMAZON': 'AMZN'
+                    }
+                    symbol = symbol_map.get(symbol, symbol)
+                
+                if not st.session_state.user_subscriptions or symbol in st.session_state.user_subscriptions:
+                    # Check if event is upcoming
+                    event_date = None
+                    for date_field in ['effective_date', 'ex_date', 'record_date', 'payable_date']:
+                        if event.get(date_field):
+                            try:
+                                if isinstance(event[date_field], str):
+                                    event_date = datetime.strptime(event[date_field], '%Y-%m-%d').date()
+                                else:
+                                    event_date = event[date_field]
+                                break
+                            except:
+                                continue
+                    
+                    if event_date and today <= event_date <= week_from_now:
+                        event['symbol'] = symbol
+                        event['event_date'] = event_date
+                        filtered_events.append(event)
+
+        # Sort by date
+        filtered_events.sort(key=lambda x: x.get('event_date', today))
         
+        if filtered_events:
+            # Display metrics
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("📊 Total Upcoming", len(filtered_events))
+            with col2:
+                dividend_count = len([e for e in filtered_events if 'dividend' in e.get('event_type', '').lower()])
+                st.metric("💰 Dividends", dividend_count)
+            with col3:
+                # Count inquiries from MCP response or sample data
+                total_inquiries = sum(len(event.get('inquiries', [])) for event in filtered_events)
+                # if total_inquiries == 0:
+                #     # Fallback to sample inquiries count
+                #     open_inquiries = get_sample_inquiries(filtered_events)
+                #     total_inquiries = len(open_inquiries)
+                st.metric("❓ Open Inquiries", total_inquiries)
+            with col4:
+                # Count urgent inquiries from MCP response or sample data  
+                urgent_count = 0
+                for event in filtered_events:
+                    event_inquiries = event.get('inquiries', [])
+                    # if not event_inquiries:
+                    #     # Fallback to sample inquiries
+                    #     event_inquiries = [inq for inq in get_sample_inquiries([event]) 
+                    #                      if inq.get('event_id') == event.get('event_id')]
+                    urgent_count += len([i for i in event_inquiries if i.get('priority') == 'HIGH'])
+                st.metric("🚨 Urgent Issues", urgent_count)
+            
+            # Display events with inquiry status
+            for i, event in enumerate(filtered_events[:20]):  # Show top 20
+                with st.expander(
+                    f"🎯 **{event.get('symbol', 'Unknown')}** - {event.get('event_type', 'Unknown').replace('_', ' ').title()} "
+                    f"({event.get('event_date', 'Unknown')})", 
+                    expanded=i < 3
+                ):
+                    # Event details
+                    col1, col2 = st.columns([2, 1])
+                    
+                    with col1:
+                        st.write(f"**Company:** {event.get('issuer_name', event.get('company_name', 'Unknown'))}")
+                        st.write(f"**Type:** {event.get('event_type', 'Unknown').replace('_', ' ').title()}")
+                        st.write(f"**Status:** {event.get('status', 'Unknown').title()}")
+                        st.write(f"**Description:** {event.get('description', 'No description available')}")
+                    
+                    with col2:
+                        # Check for existing inquiries from MCP response or sample data
+                        event_inquiries = event.get('inquiries', [])
+                        if event_inquiries:
+                            st.warning(f"⚠️ {len(event_inquiries)} Open Inquiry(ies)")
+                            for inquiry in event_inquiries:
+                                st.write(f"**{inquiry.get('subject', 'No subject')}**")
+                                st.write(f"Status: {inquiry.get('status', 'Unknown')}")
+                                st.write(f"Priority: {inquiry.get('priority', 'Unknown')}")
+                        else:
+                            st.success("✅ No open inquiries")
+                        
+                        # Button to create new inquiry
+                        if st.button(f"❓ Create Inquiry", key=f"inquiry_{event.get('event_id', i)}"):
+                            st.session_state.create_inquiry_for = event
+                            st.rerun()
+        else:
+            st.info("📭 No upcoming corporate actions found for your subscribed symbols in the next 7 days.")
+            
+            # Suggestion to add subscriptions
+            if not st.session_state.user_subscriptions:
+                st.warning("💡 Add some symbol subscriptions above to see relevant corporate actions!")
+    
+    except Exception as e:
+        st.error(f"❌ Error loading upcoming actions: {str(e)}")
+        st.info("📊 Using sample data for demonstration")
+
+def get_sample_upcoming_events(subscribed_symbols=None):
+    """Get sample upcoming events for the next week"""
+    from datetime import timedelta
+    import random
+    
+    # Base events happening in the next 7 days
+    today = datetime.now()
+    sample_events = []
+    
+    companies = [
+        {"symbol": "AAPL", "company_name": "Apple Inc."},
+        {"symbol": "MSFT", "company_name": "Microsoft Corporation"},
+        {"symbol": "GOOGL", "company_name": "Alphabet Inc."},
+        {"symbol": "TSLA", "company_name": "Tesla Inc."},
+        {"symbol": "AMZN", "company_name": "Amazon.com Inc."},
+        {"symbol": "META", "company_name": "Meta Platforms Inc."},
+        {"symbol": "NVDA", "company_name": "NVIDIA Corporation"},
+        {"symbol": "BRK.A", "company_name": "Berkshire Hathaway Inc."},
+        {"symbol": "JPM", "company_name": "JPMorgan Chase & Co."},
+        {"symbol": "JNJ", "company_name": "Johnson & Johnson"}
+    ]
+    
+    event_types = ["dividend", "stock_split", "special_dividend", "rights_offering"]
+    statuses = ["announced", "confirmed", "pending"]
+    
+    for i, company in enumerate(companies):
+        # Create 1-2 events per company for upcoming week
+        num_events = random.randint(1, 2)
+        for j in range(num_events):
+            event_date = today + timedelta(days=random.randint(1, 7))
+            event_type = random.choice(event_types)
+            
+            event = {
+                "event_id": f"{company['symbol']}_EVT_{event_date.strftime('%Y%m%d')}_{j+1}",
+                "symbol": company["symbol"],
+                "company_name": company["company_name"],
+                "event_type": event_type,
+                "status": random.choice(statuses),
+                "announcement_date": (today - timedelta(days=random.randint(1, 5))).strftime('%Y-%m-%d'),                "event_date": event_date.strftime('%Y-%m-%d'),
+                "record_date": (event_date - timedelta(days=2)).strftime('%Y-%m-%d'),
+                "description": f"{event_type.replace('_', ' ').title()} for {company['company_name']}",
+                "details": {
+                    "amount": f"${random.uniform(0.5, 3.0):.2f}" if "dividend" in event_type else None,
+                    "ratio": f"{random.randint(2, 5)}:1" if "split" in event_type else None
+                }
+            }
+            sample_events.append(event)
+    
+    # Filter by subscribed symbols if provided
+    if subscribed_symbols:
+        sample_events = [e for e in sample_events if e.get('symbol') in subscribed_symbols]
+    
+    # Sort by event date
+    sample_events.sort(key=lambda x: x.get('event_date', today.strftime('%Y-%m-%d')))
+    
+    return sample_events
+
+def get_sample_inquiries(events):
+    """Generate sample inquiries for events"""
+    inquiries = []
+    
+    for event in events:
+        # 30% chance of having an inquiry
+        import random
+        if random.random() < 0.3:
+            inquiry_id = f"INQ_{event.get('event_id', 'UNKNOWN')}"
+            inquiries.append({
+                "inquiry_id": inquiry_id,
+                "event_id": event.get('event_id'),
+                "user_id": "user_001",
+                "user_name": "Demo User",
+                "subject": f"Question about {event.get('event_type', '').replace('_', ' ')} timing",
+                "description": f"Need clarification on the {event.get('event_type')} process and impact on my holdings.",
+                "priority": random.choice(["LOW", "MEDIUM", "HIGH"]),
+                "status": random.choice(["OPEN", "ACKNOWLEDGED", "IN_REVIEW"]),
+                "created_at": datetime.now(),
+                "assigned_to": "admin_001" if random.random() < 0.5 else None
+            })
+    
+    return inquiries
+
+def show_process_workflow():
+    """Display the inquiry process workflow interface"""
+    st.header("🔄 Process Workflow - Inquiry Management")
+    
+    # Initialize session state for inquiries
+    # if "inquiries" not in st.session_state:
+    #     st.session_state.inquiries = get_sample_inquiries(get_sample_upcoming_events())
+    if "inquiries_loaded" not in st.session_state:
+        st.session_state.inquiries_loaded = False
+    
+    # Load inquiries from database on first load for subscribed events
+    if not st.session_state.inquiries_loaded and client and st.session_state.user_subscriptions:
+        try:
+            # Get upcoming events for user's subscriptions to fetch their inquiries
+            result = client._call_tool(
+                MCP_SERVERS["rag"], 
+                "get_upcoming_events_tool",
+                {"user_id": st.session_state.user_id, "days_ahead": 30}
+            )
+            
+            if isinstance(result, str):
+                result = json.loads(result)
+                mcp_events = result.get("upcoming_events", [])
+            elif isinstance(result, dict) and result.get("upcoming_events"):
+                mcp_events = result["upcoming_events"]
+            
+            database_inquiries = []
+            for event in mcp_events:
+                event_inquiries = event.get("inquiries", [])
+                database_inquiries.extend(event_inquiries)
+            
+            if database_inquiries:
+                st.session_state.inquiries = database_inquiries
+                st.info(f"📊 Loaded {len(database_inquiries)} inquiries from database")
+                
+            st.session_state.inquiries_loaded = True
+        except Exception as e:
+            st.warning(f"⚠️ Could not load inquiries from database: {str(e)}")
+            st.session_state.inquiries_loaded = True
+    
+    # Check if we need to create a new inquiry
+    if "create_inquiry_for" in st.session_state:
+        event = st.session_state.create_inquiry_for
+        st.markdown("### 📝 Create New Inquiry")
+        
+        with st.form("new_inquiry_form"):
+            col1, col2 = st.columns(2)
+            with col1:
+                subject = st.text_input("Subject", value=f"Question about {event.get('event_type', '').replace('_', ' ')}")
+                priority = st.selectbox("Priority", ["LOW", "MEDIUM", "HIGH", "URGENT"])
+            with col2:
+                user_organization = st.text_input("Organization", value="Demo Corp")
+                category = st.selectbox("Category", ["GENERAL", "TIMING", "IMPACT", "PROCESS", "DOCUMENTATION"])
+            
+            description = st.text_area(
+                "Description", 
+                value=f"I have questions regarding the {event.get('event_type', '').replace('_', ' ')} for {event.get('symbol')}. Please provide clarification."
+            )
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.form_submit_button("✅ Submit Inquiry"):
+                    new_inquiry = {
+                        "inquiry_id": f"INQ_{len(st.session_state.inquiries) + 1:03d}",
+                        "event_id": event.get('event_id'),
+                        "user_id": st.session_state.user_id,
+                        "user_name": st.session_state.user_name,
+                        "subject": subject,
+                        "description": description,
+                        "priority": priority,
+                        "status": "OPEN",
+                        "created_at": datetime.now(),
+                        "organization": user_organization,
+                        "category": category
+                    }
+                    
+                    # Try to save via MCP tool
+                    if client:
+                        try:
+                            result = client._call_tool(
+                                MCP_SERVERS["rag"], 
+                                "create_inquiry_tool",
+                                {
+                                    "event_id": event.get('event_id'),
+                                    "user_id": st.session_state.user_id,
+                                    "user_name": st.session_state.user_name,
+                                    "organization": user_organization,
+                                    "subject": subject,
+                                    "description": description,
+                                    "priority": priority
+                                }
+                            )
+                            
+                            if isinstance(result, str):
+                                result = json.loads(result)
+                            
+                            if isinstance(result, dict) and result.get("success", False):
+                                st.success("✅ Inquiry created and saved to database!")
+                                new_inquiry["inquiry_id"] = result.get("inquiry_id", new_inquiry["inquiry_id"])
+                            else:
+                                st.warning("✅ Inquiry created (session only - database unavailable)")
+                        except Exception as e:
+                            st.warning(f"✅ Inquiry created (session only - {str(e)})")
+                    else:
+                        st.warning("✅ Inquiry created (session only)")
+                    
+                    # Add to session state
+                    st.session_state.inquiries.append(new_inquiry)
+                    del st.session_state.create_inquiry_for
+                    st.rerun()
+            
+            with col2:
+                if st.form_submit_button("❌ Cancel"):
+                    del st.session_state.create_inquiry_for
+                    st.rerun()
+    
+    # Display existing inquiries
+    st.markdown("### 📋 Current Inquiries")
+    
+    # Filter and search
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        status_filter = st.selectbox("Filter by Status", ["ALL", "OPEN", "ACKNOWLEDGED", "IN_REVIEW", "RESPONDED", "RESOLVED"])
+    with col2:
+        priority_filter = st.selectbox("Filter by Priority", ["ALL", "LOW", "MEDIUM", "HIGH", "URGENT"])
+    with col3:
+        search_term = st.text_input("Search", placeholder="Search inquiries...")
+    
+    # Filter inquiries
+    filtered_inquiries = st.session_state.inquiries
+    
+    if status_filter != "ALL":
+        filtered_inquiries = [i for i in filtered_inquiries if i.get('status') == status_filter]
+    if priority_filter != "ALL":
+        filtered_inquiries = [i for i in filtered_inquiries if i.get('priority') == priority_filter]
+    if search_term:
+        filtered_inquiries = [i for i in filtered_inquiries 
+                            if search_term.lower() in i.get('subject', '').lower() 
+                            or search_term.lower() in i.get('description', '').lower()]
+    
+    # Display metrics
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("📊 Total Inquiries", len(filtered_inquiries))
+    with col2:
+        open_count = len([i for i in filtered_inquiries if i.get('status') in ['OPEN', 'ACKNOWLEDGED']])
+        st.metric("🔓 Open", open_count)
+    with col3:
+        urgent_count = len([i for i in filtered_inquiries if i.get('priority') == 'URGENT'])
+        st.metric("🚨 Urgent", urgent_count)
+    with col4:
+        resolved_count = len([i for i in filtered_inquiries if i.get('status') == 'RESOLVED'])
+        st.metric("✅ Resolved", resolved_count)
+    
+    # Display inquiries
+    for inquiry in filtered_inquiries:
+        with st.expander(
+            f"🎫 **{inquiry.get('inquiry_id')}** - {inquiry.get('subject')} "
+            f"[{inquiry.get('priority')} | {inquiry.get('status')}]",
+            expanded=True
+        ):
+            col1, col2 = st.columns([2, 1])
+            
+            with col1:
+                st.write(f"**Description:** {inquiry.get('description')}")
+                st.write(f"**User:** {inquiry.get('user_name')} ({inquiry.get('organization', 'Unknown')})")
+                st.write(f"**Created:** {inquiry.get('created_at', datetime.now()).strftime('%Y-%m-%d %H:%M')}")
+                
+                # Response form
+                response_key = f"response_{inquiry.get('inquiry_id')}"
+                response = st.text_area(
+                    "Administrator Response", 
+                    value=inquiry.get('response', ''),
+                    key=response_key
+                )
+            
+            with col2:
+                # Status update
+                new_status = st.selectbox(
+                    "Update Status",
+                    ["OPEN", "ACKNOWLEDGED", "IN_REVIEW", "RESPONDED", "ESCALATED", "RESOLVED", "CLOSED"],
+                    index=["OPEN", "ACKNOWLEDGED", "IN_REVIEW", "RESPONDED", "ESCALATED", "RESOLVED", "CLOSED"].index(inquiry.get('status', 'OPEN')),
+                    key=f"status_{inquiry.get('inquiry_id')}"
+                )
+                
+                # Assignment
+                assigned_to = st.selectbox(
+                    "Assign To",
+                    ["admin_001", "admin_002", "admin_003", "None"],
+                    index=0 if inquiry.get('assigned_to') else 3,
+                    key=f"assign_{inquiry.get('inquiry_id')}"
+                )
+                
+                # Update buttons
+                if st.button(f"💾 Save Changes", key=f"save_{inquiry.get('inquiry_id')}"):
+                    # Update inquiry
+                    inquiry['status'] = new_status
+                    inquiry['response'] = response
+                    inquiry['assigned_to'] = assigned_to if assigned_to != "None" else None
+                    inquiry['updated_at'] = datetime.now()
+                    
+                    # Simulate push notification
+                    if new_status != inquiry.get('previous_status', 'OPEN'):
+                        st.success(f"🔔 Notification sent to {inquiry.get('user_name')} about status change!")
+                        inquiry['previous_status'] = new_status
+                    
+                    st.success("✅ Changes saved successfully!")
+                    st.rerun()
+                
+                if st.button(f"📧 Send Notification", key=f"notify_{inquiry.get('inquiry_id')}"):
+                    st.success(f"🔔 Notification sent to {inquiry.get('user_name')}!")
+
+def show_analytics_page():
+    """Renamed from old dashboard - now the analytics page"""
+    st.header("📊 Analytics & Insights")
+    
+    try:
+        if client:
+            # Fetch recent events using MCP client
+            events_response = client.search_corporate_actions(limit=1000)
+            if "error" not in events_response:
+                events = events_response.get("events", [])
+                st.success("✅ Connected to MCP servers - showing live data")
+            else:
+                events = get_sample_upcoming_events()
+                st.info("📊 Using sample data - MCP search failed")
+        else:
+            events = get_sample_upcoming_events()
+            st.info("📊 Using sample data - MCP client not available")
+            
+        # Normalize event data to handle different structures
+        events = normalize_event_data(events)
+        
+        # Calculate metrics
+        total_events = len(events)
+        active_events = len([e for e in events if e.get("status", "").upper() == "CONFIRMED"])
+        upcoming_events = len([e for e in events if e.get("status", "").upper() == "ANNOUNCED"])
+        pending_events = len([e for e in events if e.get("status", "").upper() == "PENDING"])
+
+        # Display metrics with color indicators
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("📈 Total Events", total_events)
+        with col2:
+            st.metric("✅ Active Events", active_events, delta=None, delta_color="normal")
+        with col3:
+            st.metric("📅 Upcoming", upcoming_events, delta=None, delta_color="normal")
+        with col4:
+            st.metric("⏳ Pending", pending_events, delta=None, delta_color="normal")
+        
+        # Create visualizations
+        if events:
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # Status distribution pie chart
+                st.subheader("📊 Event Status Distribution")
+                status_counts = {}
+                for event in events:
+                    status = event.get("status", "Unknown")
+                    status_counts[status] = status_counts.get(status, 0) + 1
+                
+                if status_counts:
+                    fig_pie = px.pie(
+                        values=list(status_counts.values()),
+                        names=list(status_counts.keys()),
+                        title="Events by Status",
+                        color_discrete_map={
+                            'confirmed': '#28a745',    # Green
+                            'announced': '#ffc107',    # Yellow
+                            'pending': '#dc3545',      # Red
+                            'processed': '#17a2b8',    # Blue
+                            'cancelled': '#6c757d'     # Gray
+                        }
+                    )
+                    fig_pie.update_traces(textposition='inside', textinfo='percent+label')
+                    st.plotly_chart(fig_pie, use_container_width=True)
+            
+            with col2:
+                # Event type distribution
+                st.subheader("🏢 Event Type Distribution")
+                type_counts = {}
+                for event in events:
+                    event_type = event.get("event_type", "Unknown")
+                    type_counts[event_type] = type_counts.get(event_type, 0) + 1
+                
+                if type_counts:
+                    fig_bar = px.bar(
+                        x=list(type_counts.keys()),
+                        y=list(type_counts.values()),
+                        title="Events by Type",
+                        color=list(type_counts.values()),
+                        color_continuous_scale="viridis"
+                    )
+                    fig_bar.update_layout(xaxis_title="Event Type", yaxis_title="Count")
+                    st.plotly_chart(fig_bar, use_container_width=True)
+        
+        # Recent events table with color-coded status
+        st.subheader("📋 Recent Corporate Actions")
+        if events:
+            # Create a styled dataframe
+            df = pd.DataFrame(events)
+            
+            # Format the dataframe for display with normalized column names
+            display_columns = ["company_name", "symbol", "event_type", "status", "announcement_date"]
+            available_columns = [col for col in display_columns if col in df.columns]
+            
+            if available_columns:
+                display_df = df[available_columns].copy()
+                
+                # Add status styling function
+                def color_status(val):
+                    if val == 'confirmed':
+                        return 'background-color: #d4edda; color: #155724; font-weight: bold;'
+                    elif val == 'announced':
+                        return 'background-color: #fff3cd; color: #856404; font-weight: bold;'
+                    elif val == 'pending':
+                        return 'background-color: #f8d7da; color: #721c24; font-weight: bold;'
+                    elif val == 'processed':
+                        return 'background-color: #d1ecf1; color: #0c5460; font-weight: bold;'
+                    else:
+                        return 'background-color: #e2e3e5; color: #383d41; font-weight: bold;'
+                
+                # Rename columns for better display
+                column_mapping = {
+                    "company_name": "Company",
+                    "symbol": "Symbol", 
+                    "event_type": "Event Type",
+                    "status": "Status",
+                    "announcement_date": "Announced"
+                }
+                display_df = display_df.rename(columns=column_mapping)
+                
+                # Apply styling
+                styled_df = display_df.style.applymap(color_status, subset=['Status'])
+                st.dataframe(styled_df, use_container_width=True)
+            else:
+                st.dataframe(df, use_container_width=True)
+                
+            # Additional insights
+            st.subheader("🔍 Quick Insights")
+            
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                # Most active companies
+                company_counts = {}
+                for event in events:
+                    company = event.get("company_name", "Unknown")
+                    company_counts[company] = company_counts.get(company, 0) + 1
+                
+                if company_counts:
+                    most_active = max(company_counts, key=company_counts.get)
+                    st.metric("🏆 Most Active Company", most_active, f"{company_counts[most_active]} events")
+            
+            with col2:
+                # Most common event type
+                if type_counts:
+                    most_common_type = max(type_counts, key=type_counts.get)
+                    st.metric("📈 Most Common Event", most_common_type.replace('_', ' ').title(), f"{type_counts[most_common_type]} events")
+            
+            with col3:
+                # Event timeline
+                recent_events = len([e for e in events if e.get("announcement_date", "").startswith("2024")])
+                st.metric("📅 Recent Events (2024)", recent_events, "events")
+                
+        else:
+            st.info("No recent events found")
+            
+    except Exception as e:
+        st.error(f"Error loading dashboard: {str(e)}")
+        show_sample_dashboard()
+
+def show_administrator_page():
+    """Administrator interface for managing inquiries"""
+    st.header("👨‍💼 Administrator Dashboard")
+    
+    # Check user role
+    if st.session_state.get('user_role') != 'ADMINISTRATOR':
+        st.warning("⚠️ Access denied. Switch to Administrator role to access this page.")
+        return
+    
+    #Initialize inquiries if not exists
+    #if "inquiries" not in st.session_state:
+        #st.session_state.inquiries = get_sample_inquiries(get_sample_upcoming_events())
+    
+    if "inquiries_loaded" not in st.session_state:
+        st.session_state.inquiries_loaded = False
+
+    # Load inquiries from database on first load for subscribed events
+    if not st.session_state.inquiries_loaded and client and st.session_state.user_subscriptions:
+        try:
+            # Get upcoming events for user's subscriptions to fetch their inquiries
+            result = client._call_tool(
+                MCP_SERVERS["rag"], 
+                "get_upcoming_events_tool",
+                {"user_id": st.session_state.user_id, "days_ahead": 30}
+            )
+            
+            if isinstance(result, str):
+                result = json.loads(result)
+                mcp_events = result.get("upcoming_events", [])
+            elif isinstance(result, dict) and result.get("upcoming_events"):
+                mcp_events = result["upcoming_events"]
+            
+            print(f"🔍 Loaded {len(mcp_events)} MCP events for inquiries")
+            database_inquiries = []
+            for event in mcp_events:
+                event_inquiries = event.get("inquiries", [])
+                database_inquiries.extend(event_inquiries)
+            
+            if database_inquiries:
+                st.session_state.inquiries = database_inquiries
+                st.info(f"📊 Loaded {len(database_inquiries)} inquiries from database")
+                
+            st.session_state.inquiries_loaded = True
+        except Exception as e:
+            st.warning(f"⚠️ Could not load inquiries from database: {str(e)}")
+            st.session_state.inquiries_loaded = True
+
+    # Admin metrics
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        pending_count = len([i for i in st.session_state.inquiries if i.get('status') in ['OPEN', 'ACKNOWLEDGED']])
+        st.metric("🔄 Pending", pending_count)
+    with col2:
+        assigned_count = len([i for i in st.session_state.inquiries if i.get('assigned_to')])
+        st.metric("👤 Assigned", assigned_count)    
+    with col3:
+        urgent_count = len([i for i in st.session_state.inquiries if i.get('priority') == 'URGENT'])
+        st.metric("🚨 Urgent", urgent_count)
+    with col4:
+        avg_response_time = "2.3 days"  # Mock data
+        st.metric("⏱️ Avg Response", avg_response_time)
+    
+    st.markdown("### 🛠️ Inquiry Management")
+    
+    # Data Management Section
+    st.markdown("### �️ Data Management")
+    with st.expander("📊 Sample Data Generation", expanded=False):
+        st.write("Generate sample corporate actions and inquiries for testing purposes")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            symbols_input = st.text_input(
+                "Stock Symbols (comma-separated)", 
+                value="AAPL,MSFT,TSLA,GOOGL,AMZN",
+                help="Enter stock symbols separated by commas"
+            )
+        with col2:
+            events_per_symbol = st.number_input(
+                "Events per Symbol", 
+                min_value=1, 
+                max_value=10, 
+                value=3,
+                help="Number of corporate action events to generate per symbol"
+            )
+        
+        if st.button("🎲 Generate Sample Data", type="primary"):
+            if client:
+                with st.spinner("Generating sample data..."):
+                    try:
+                        # Call the generate_sample_data MCP tool
+                        result = client._call_tool(
+                            MCP_SERVERS["rag"],
+                            "generate_sample_data",
+                            {
+                                "symbols": symbols_input,
+                                "num_events_per_symbol": events_per_symbol
+                            }
+                        )
+                        
+                        if isinstance(result, str):
+                            try:
+                                result = json.loads(result)
+                            except json.JSONDecodeError:
+                                st.error(f"Failed to parse response: {result}")
+                                return
+                        
+                        if "error" in result:
+                            st.error(f"❌ Error generating sample data: {result['error']}")
+                        elif result.get("success"):
+                            st.success("✅ Sample data generated successfully!")
+                            
+                            # Display summary
+                            summary = result.get("summary", {})
+                            col1, col2, col3 = st.columns(3)
+                            with col1:
+                                st.metric("📈 Events Created", summary.get("total_events_stored", 0))
+                            with col2:
+                                st.metric("💬 Inquiries Created", summary.get("total_inquiries_stored", 0))
+                            with col3:
+                                st.metric("🏢 Symbols", len(summary.get("symbols", [])))
+                            
+                            # Show sample data
+                            if "sample_events" in result and result["sample_events"]:
+                                st.write("**Sample Events Generated:**")
+                                for event in result["sample_events"]:
+                                    st.write(f"• {event.get('event_id')} - {event.get('event_type')} for {event.get('security', {}).get('symbol')}")
+                            
+                            if "sample_inquiries" in result and result["sample_inquiries"]:
+                                st.write("**Sample Inquiries Generated:**")
+                                for inquiry in result["sample_inquiries"]:
+                                    st.write(f"• {inquiry.get('inquiry_id')} - {inquiry.get('subject')}")
+                        else:
+                            st.warning(f"⚠️ Unexpected response: {result}")
+                            
+                    except Exception as e:
+                        st.error(f"❌ Failed to generate sample data: {str(e)}")
+            else:
+                st.error("❌ MCP client not available. Please ensure the RAG server is running.")
+        
+        # Database status check
+        if st.button("🔍 Check Database Status"):
+            if client:
+                with st.spinner("Checking database status..."):
+                    try:
+                        result = client._call_tool(
+                            MCP_SERVERS["rag"],
+                            "check_container_status",
+                            {}
+                        )
+                        
+                        if isinstance(result, str):
+                            try:
+                                result = json.loads(result)
+                            except json.JSONDecodeError:
+                                st.error(f"Failed to parse response: {result}")
+                                return
+                        
+                        if "error" in result:
+                            st.error(f"❌ Database check failed: {result['error']}")
+                        else:
+                            st.write("**Database Status:**")
+                            status = result.get("overall_status", "unknown")
+                            if status == "healthy":
+                                st.success(f"🟢 Database Status: {status}")
+                            else:
+                                st.warning(f"⚠️ Database Status: {status}")
+                            
+                            # Show container details
+                            containers = result.get("containers", {})
+                            col1, col2, col3 = st.columns(3)
+                            with col1:
+                                corp_status = "🟢" if containers.get("corporate_actions", {}).get("available") else "🔴"
+                                st.write(f"{corp_status} Corporate Actions")
+                            with col2:
+                                inq_status = "🟢" if containers.get("inquiries", {}).get("available") else "🔴"
+                                st.write(f"{inq_status} Inquiries")
+                            with col3:
+                                sub_status = "🟢" if containers.get("subscriptions", {}).get("available") else "🔴"
+                                st.write(f"{sub_status} Subscriptions")
+                            
+                    except Exception as e:
+                        st.error(f"❌ Failed to check database status: {str(e)}")
+            else:
+                st.error("❌ MCP client not available. Please ensure the RAG server is running.")
+    
+    # Bulk actions
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        if st.button("📢 Broadcast Update"):
+            st.info("Broadcast update feature would notify all subscribers")
+    with col2:
+        if st.button("📊 Generate Report"):
+            st.info("Report generation feature would create analytics report")
+    with col3:
+        if st.button("🔄 Refresh Data"):
+            st.rerun()
+    
+    # Inquiry management
+    for i, inquiry in enumerate(st.session_state.inquiries):
+        if inquiry.get('status') not in ['RESOLVED', 'CLOSED']:
+            with st.expander(
+                f"🎫 **{inquiry.get('inquiry_id')}** - {inquiry.get('subject')} "
+                f"[{inquiry.get('priority')} | {inquiry.get('status')}]",
+                expanded=i < 2
+            ):
+                col1, col2 = st.columns([2, 1])
+                
+                with col1:
+                    st.write(f"**Description:** {inquiry.get('description')}")
+                    st.write(f"**User:** {inquiry.get('user_name')} ({inquiry.get('organization', 'Unknown')})")
+                    st.write(f"**Created:** {inquiry.get('created_at', datetime.now()).strftime('%Y-%m-%d %H:%M')}")
+                    
+                    # Response form
+                    response_key = f"response_{inquiry.get('inquiry_id')}"
+                    response = st.text_area(
+                        "Administrator Response", 
+                        value=inquiry.get('response', ''),
+                        key=response_key
+                    )
+                
+                with col2:
+                    # Status update
+                    new_status = st.selectbox(
+                        "Update Status",
+                        ["OPEN", "ACKNOWLEDGED", "IN_REVIEW", "RESPONDED", "ESCALATED", "RESOLVED", "CLOSED"],
+                        index=["OPEN", "ACKNOWLEDGED", "IN_REVIEW", "RESPONDED", "ESCALATED", "RESOLVED", "CLOSED"].index(inquiry.get('status', 'OPEN')),
+                        key=f"status_{inquiry.get('inquiry_id')}"
+                    )
+                    
+                    # Assignment
+                    assigned_to = st.selectbox(
+                        "Assign To",
+                        ["admin_001", "admin_002", "admin_003", "None"],
+                        index=0 if inquiry.get('assigned_to') else 3,
+                        key=f"assign_{inquiry.get('inquiry_id')}"
+                    )
+                    
+                    # Update buttons
+                    if st.button(f"💾 Save Changes", key=f"save_{inquiry.get('inquiry_id')}"):
+                        # Update inquiry
+                        inquiry['status'] = new_status
+                        inquiry['response'] = response
+                        inquiry['assigned_to'] = assigned_to if assigned_to != "None" else None
+                        inquiry['updated_at'] = datetime.now()
+                        
+                        # Simulate push notification
+                        if new_status != inquiry.get('previous_status', 'OPEN'):
+                            st.success(f"🔔 Notification sent to {inquiry.get('user_name')} about status change!")
+                            inquiry['previous_status'] = new_status
+                        
+                        st.success("✅ Changes saved successfully!")
+                        st.rerun()
+                    
+                    if st.button(f"📧 Send Notification", key=f"notify_{inquiry.get('inquiry_id')}"):
+                        st.success(f"🔔 Notification sent to {inquiry.get('user_name')}!")
+
 if __name__ == "__main__":
     main()

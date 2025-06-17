@@ -13,7 +13,7 @@ Write-Host ""
 # HTTP MCP Servers (ports 8000-8002)
 Write-Host "🌐 Starting HTTP MCP Servers..." -ForegroundColor Yellow
 
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$RepoRoot\mcp-server'; Write-Host '🔥 MCP RAG Server (HTTP) - Port 8000' -ForegroundColor Green; py main.py --port 8000"
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$RepoRoot\mcp-rag'; Write-Host '🔥 MCP RAG Server (HTTP) - Port 8000' -ForegroundColor Green; py main.py --port 8000"
 
 Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$RepoRoot\mcp-websearch'; Write-Host '🔍 MCP WebSearch Server (HTTP) - Port 8001' -ForegroundColor Green; py main.py --port 8001"
 
@@ -22,7 +22,7 @@ Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$RepoRoot\mcp
 # SSE MCP Servers (ports 8003-8005)
 Write-Host "⚡ Starting SSE MCP Servers..." -ForegroundColor Yellow
 
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$RepoRoot\mcp-server'; Write-Host '🔥 MCP RAG Server (SSE) - Port 8003' -ForegroundColor Magenta; py main.py --sse --port 8003"
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$RepoRoot\mcp-rag'; Write-Host '🔥 MCP RAG Server (SSE) - Port 8003' -ForegroundColor Magenta; py main.py --sse --port 8003"
 
 Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$RepoRoot\mcp-websearch'; Write-Host '🔍 MCP WebSearch Server (SSE) - Port 8004' -ForegroundColor Magenta; py main.py --sse --port 8004"
 

@@ -3,7 +3,7 @@
     "corporate-actions-rag": {
       "command": "C:\\Users\\astalati\\AppData\\Local\\Programs\\Python\\Python311\\python.exe",
       "args": [
-        "d:\\repos\\corporateactions\\mcp-server\\main.py"
+        "d:\\repos\\corporateactions\\mcp-rag\\main.py"
       ],
       "env": {
         "PYTHONPATH": "C:\\Users\\astalati\\AppData\\Roaming\\Python\\Python311\\site-packages;C:\\Users\\astalati\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages",

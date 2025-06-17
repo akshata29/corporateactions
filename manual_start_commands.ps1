@@ -6,7 +6,7 @@ Write-Host ""
 
 # MCP RAG Server (HTTP)
 Write-Host "1️⃣ MCP RAG Server (HTTP - Port 8000):" -ForegroundColor Yellow
-Write-Host "cd .\mcp-server\; py main.py --port 8000" -ForegroundColor White
+Write-Host "cd .\mcp-rag\; py main.py --port 8000" -ForegroundColor White
 Write-Host ""
 
 # MCP WebSearch Server (HTTP)  
@@ -24,7 +24,7 @@ Write-Host ""
 
 # MCP RAG Server (SSE)
 Write-Host "4️⃣ MCP RAG Server (SSE - Port 8003):" -ForegroundColor Yellow
-Write-Host "cd .\mcp-server\; py main.py --sse --port 8003" -ForegroundColor White
+Write-Host "cd .\mcp-rag\; py main.py --sse --port 8003" -ForegroundColor White
 Write-Host ""
 
 # MCP WebSearch Server (SSE)

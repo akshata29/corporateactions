@@ -165,7 +165,7 @@ AZURE_COSMOS_DATABASE_NAME=corporateactions
 
 AZURE_SEARCH_ENDPOINT=$searchEndpoint
 AZURE_SEARCH_KEY=$searchKey
-AZURE_SEARCH_INDEX_NAME=corporate-actions
+AZURE_SEARCH_INDEX_NAME=corporateactions
 
 AZURE_OPENAI_ENDPOINT=$openaiEndpoint
 AZURE_OPENAI_KEY=$openaiKey

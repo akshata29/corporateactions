@@ -18,6 +18,7 @@ import os
 import tempfile
 import subprocess
 from dotenv import load_dotenv
+import ast
 
 # Load environment variables
 load_dotenv(".env", override=True)
@@ -191,8 +192,7 @@ class AzureAIAgentManager:
     def _convert_mcp_schema_to_openai(self, mcp_schema: dict) -> dict:
         """Convert MCP tool schema to OpenAI function schema"""
         if not mcp_schema:
-            return {"type": "object", "properties": {}}
-              # Basic conversion - adjust as needed for your specific schemas
+            return {"type": "object", "properties": {}}        # Basic conversion - adjust as needed for your specific schemas
         return {
             "type": "object",
             "properties": mcp_schema.get("properties", {}),
@@ -202,6 +202,32 @@ class AzureAIAgentManager:
     async def _create_agent(self):
         """Create Azure AI Agent with MCP tool functions following official documentation"""
         try:
+            # First, check if an agent with the same name already exists
+            st.sidebar.info("🔍 Checking for existing agents...")
+            
+            try:
+                existing_agents = self.project_client.agents.list_agents()
+                agent_list = list(existing_agents.value) if hasattr(existing_agents, 'value') else list(existing_agents)
+                
+                # Look for existing agent with matching name
+                target_agent_name = AZURE_AI_CONFIG["agent_name"]
+                existing_agent = None
+                
+                for agent in agent_list:
+                    if agent.name == target_agent_name:
+                        existing_agent = agent
+                        break
+                
+                if existing_agent:
+                    st.sidebar.success(f"✅ Found existing agent: {existing_agent.name} (ID: {existing_agent.id})")
+                    self.agent = existing_agent
+                    return
+                else:
+                    st.sidebar.info(f"💡 No existing agent named '{target_agent_name}' found. Creating new agent...")
+                    
+            except Exception as list_error:
+                st.sidebar.warning(f"⚠️ Could not list existing agents: {str(list_error)}. Creating new agent...")
+            
             # Create agent following the official Azure AI Agents quickstart pattern
             # Reference: https://learn.microsoft.com/en-us/azure/ai-services/agents/quickstart?pivots=programming-language-python-azure
             self.agent = self.project_client.agents.create_agent(
@@ -405,6 +431,42 @@ Please analyze this data and provide insights based on the user's query.
             "pie chart", "bar chart", "timeline", "dashboard", "metrics"
         ]
         return any(keyword in message.lower() for keyword in viz_keywords)
+    
+    async def check_existing_agent(self):
+        """Check if an agent with the configured name already exists"""
+        if not USE_AZURE_AI:
+            return False
+        
+        try:
+            # Get Azure AI configuration
+            endpoint = AZURE_AI_CONFIG["project_url"]
+            
+            # Ensure endpoint has https protocol
+            if not endpoint.startswith("https://"):
+                endpoint = f"https://{endpoint}"
+            
+            # Initialize minimal project client for checking
+            if not self.project_client:
+                self.project_client = AIProjectClient(
+                    endpoint=endpoint,
+                    credential=DefaultAzureCredential()
+                )
+            
+            # Check for existing agents
+            existing_agents = self.project_client.agents.list_agents()
+            agent_list = list(existing_agents.value) if hasattr(existing_agents, 'value') else list(existing_agents)
+            
+            # Look for existing agent with matching name
+            target_agent_name = AZURE_AI_CONFIG["agent_name"]
+            for agent in agent_list:
+                if agent.name == target_agent_name:
+                    return True
+            
+            return False
+            
+        except Exception as e:
+            st.sidebar.warning(f"⚠️ Could not check existing agents: {str(e)}")
+            return False
 
 # Initialize Azure AI Agent Manager
 @st.cache_resource
@@ -679,28 +741,72 @@ if "chat_history" not in st.session_state:
 if "agent_initialized" not in st.session_state:
     st.session_state.agent_initialized = False
 
+if "existing_agent_checked" not in st.session_state:
+    st.session_state.existing_agent_checked = False
+
+if "existing_agent_found" not in st.session_state:
+    st.session_state.existing_agent_found = False
+
+# Check for existing agent on first load
+if not st.session_state.existing_agent_checked:
+    with st.spinner("🔍 Checking for existing Azure AI Agent..."):
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        st.session_state.existing_agent_found = loop.run_until_complete(agent_manager.check_existing_agent())
+        loop.close()
+        st.session_state.existing_agent_checked = True
+        
+        # If agent exists, mark as initialized
+        if st.session_state.existing_agent_found:
+            st.session_state.agent_initialized = True
+
 # Sidebar - Initialize Agent
 with st.sidebar:
     st.markdown("### 🤖 Azure AI Agent Status")
     
     if not st.session_state.agent_initialized:
-        if st.button("🚀 Initialize Azure AI Agent", type="primary"):
-            with st.spinner("Initializing Azure AI Agent with MCP tools..."):
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                success = loop.run_until_complete(agent_manager.initialize())
-                loop.close()
-                
-                if success:
-                    st.session_state.agent_initialized = True
-                    st.success("✅ Agent initialized successfully!")
-                    st.rerun()
-                else:
-                    st.error("❌ Failed to initialize agent")
+        # Only show initialize button if no existing agent found
+        if not st.session_state.existing_agent_found:
+            if st.button("🚀 Initialize Azure AI Agent", type="primary"):
+                with st.spinner("Initializing Azure AI Agent with MCP tools..."):
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    success = loop.run_until_complete(agent_manager.initialize())
+                    loop.close()
+                    
+                    if success:
+                        st.session_state.agent_initialized = True
+                        st.success("✅ Agent initialized successfully!")
+                        st.rerun()
+                    else:
+                        st.error("❌ Failed to initialize agent")
+        else:
+            # Show activate button for existing agent
+            if st.button("🔗 Connect to Existing Agent", type="primary"):
+                with st.spinner("Connecting to existing Azure AI Agent..."):
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    success = loop.run_until_complete(agent_manager.initialize())
+                    loop.close()
+                    
+                    if success:
+                        st.session_state.agent_initialized = True
+                        st.success("✅ Connected to existing agent!")
+                        st.rerun()
+                    else:
+                        st.error("❌ Failed to connect to agent")
     else:
-        st.success("✅ Azure AI Agent Active")
+        # Agent is initialized - show status and reinitialize option
+        if st.session_state.existing_agent_found:
+            st.success("✅ Azure AI Agent Active (Existing Agent)")
+        else:
+            st.success("✅ Azure AI Agent Active (New Agent)")
+        
         if st.button("🔄 Reinitialize Agent"):
+            # Reset all agent-related session state
             st.session_state.agent_initialized = False
+            st.session_state.existing_agent_checked = False
+            st.session_state.existing_agent_found = False
             st.rerun()
 
 # Page selection
@@ -979,8 +1085,7 @@ elif page == "🔍 Search Events":
         submit_button = st.form_submit_button("🔍 Search with Azure AI Agent", type="primary")
     
     if submit_button:
-        if st.session_state.agent_initialized:
-            # Use Azure AI Agent with MCP tools for search
+        if st.session_state.agent_initialized:            # Use Azure AI Agent with MCP tools for search
             search_query = f"Search for corporate actions"
             if search_text:
                 search_query += f" containing '{search_text}'"
@@ -1013,7 +1118,7 @@ elif page == "🔍 Search Events":
                     
                     # Show AI analysis
                     st.markdown("### 🤖 AI Analysis")
-                    st.write(response["answer"])
+                    st.markdown(response["answer"])
                     
                     # Try to extract and display structured results
                     if raw_mcp_data:
@@ -1135,22 +1240,24 @@ elif page == "💬 AI Assistant":
     # Chat interface
     if st.session_state.agent_initialized:
         st.success("✅ Azure AI Agent is ready to help!")
-        
-        # Display chat history
+          # Display chat history
         for i, msg in enumerate(st.session_state.chat_history):
             if msg["role"] == "user":
                 st.markdown(f"""
                 <div class="chat-message user-message">
-                    <strong>👤 You:</strong> {msg["content"]}
+                    <strong>👤 You:</strong>
                 </div>
                 """, unsafe_allow_html=True)
+                st.markdown(msg["content"])
             else:
+                parsed = ast.literal_eval(msg["content"]) if isinstance(msg["content"], str) else msg["content"]
                 st.markdown(f"""
                 <div class="chat-message assistant-message">
-                    <strong>🤖 AI Assistant:</strong> {msg["content"]}
+                    <strong>🤖 AI Assistant:</strong>
                 </div>
                 """, unsafe_allow_html=True)
-        
+                st.markdown(parsed["value"])
+
         # Chat input
         user_input = st.chat_input("Ask about corporate actions, request analysis, or search for specific events...")
         
@@ -1426,8 +1533,7 @@ elif page == "📊 Analytics":
             1. Key trends and patterns
             2. Risk assessments
             3. Investment implications
-            4. Recommendations for further analysis
-            """
+            4. Recommendations for further analysis            """
             
             with st.spinner("🤖 Azure AI Agent analyzing data..."):
                 loop = asyncio.new_event_loop()
@@ -1439,7 +1545,12 @@ elif page == "📊 Analytics":
                 
                 if response.get("success"):
                     st.markdown("#### 🧠 AI Analysis Results")
-                    st.write(response["answer"])
+                    parsed = ast.literal_eval(response["answer"]) if isinstance(response["answer"], str) else response["answer"]
+                    # Verify if we have "value" key in parsed
+                    if "value" not in parsed:
+                        st.markdown(parsed)
+                    else:
+                        st.markdown(parsed["value"])
                 else:
                     st.error(f"❌ Analysis failed: {response.get('error', 'Unknown error')}")
 

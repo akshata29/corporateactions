@@ -70,7 +70,7 @@ def main():
     servers = [
         {
             "name": f"Main RAG Server ({mode_text})",
-            "path": "mcp-server/main.py",
+            "path": "mcp-rag/main.py",
             "port": base_ports[0],
             "sse": sse_mode
         },

@@ -142,3 +142,111 @@ class EventStatusUpdate(BaseModel):
     update_reason: Optional[str] = Field(None, description="Reason for status update")
     updated_by: str = Field(..., description="User who made the update")
     update_details: Optional[Dict[str, Any]] = Field(None, description="Additional update details")
+
+
+# Process workflow enums and models for inquiry system
+class InquiryStatus(str, Enum):
+    """Inquiry status for process workflow"""
+    OPEN = "OPEN"
+    ACKNOWLEDGED = "ACKNOWLEDGED"
+    IN_REVIEW = "IN_REVIEW"
+    RESPONDED = "RESPONDED"
+    ESCALATED = "ESCALATED"
+    RESOLVED = "RESOLVED"
+    CLOSED = "CLOSED"
+
+class InquiryPriority(str, Enum):
+    """Inquiry priority levels"""
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+    URGENT = "URGENT"
+
+class UserRole(str, Enum):
+    """User roles for the application"""
+    CONSUMER = "CONSUMER"
+    ADMINISTRATOR = "ADMINISTRATOR"
+    ANALYST = "ANALYST"
+    SUPPORT = "SUPPORT"
+
+class NotificationType(str, Enum):
+    """Notification types for push notifications"""
+    STATUS_CHANGE = "STATUS_CHANGE"
+    NEW_RESPONSE = "NEW_RESPONSE"
+    ESCALATION = "ESCALATION"
+    RESOLUTION = "RESOLUTION"
+    DEADLINE_REMINDER = "DEADLINE_REMINDER"
+
+class ProcessInquiry(BaseModel):
+    """Enhanced inquiry model for process workflow"""
+    inquiry_id: str = Field(..., description="Unique inquiry identifier")
+    event_id: str = Field(..., description="Related corporate action event ID")
+    
+    # User information
+    user_id: str = Field(..., description="User identifier")
+    user_name: str = Field(..., description="User display name")
+    user_role: UserRole = Field(default=UserRole.CONSUMER, description="User role")
+    organization: Optional[str] = Field(None, description="User's organization")
+    
+    # Inquiry details
+    subject: str = Field(..., description="Inquiry subject/title")
+    description: str = Field(..., description="Detailed inquiry description")
+    priority: InquiryPriority = Field(default=InquiryPriority.MEDIUM, description="Inquiry priority")
+    status: InquiryStatus = Field(default=InquiryStatus.OPEN, description="Current inquiry status")
+    
+    # Process tracking
+    assigned_to: Optional[str] = Field(None, description="Administrator assigned to handle inquiry")
+    response: Optional[str] = Field(None, description="Administrative response")
+    resolution_notes: Optional[str] = Field(None, description="Final resolution notes")
+    
+    # Timing
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    due_date: Optional[datetime] = Field(None, description="Expected response due date")
+    resolved_at: Optional[datetime] = Field(None, description="Resolution timestamp")
+    
+    # Subscription and notification
+    subscribers: List[str] = Field(default_factory=list, description="User IDs subscribed to this inquiry")
+    notification_history: List[Dict[str, Any]] = Field(default_factory=list, description="Notification history")
+
+class UserSubscription(BaseModel):
+    """User subscription to corporate actions"""
+    user_id: str = Field(..., description="User identifier")
+    user_name: str = Field(..., description="User display name")
+    organization: Optional[str] = Field(None, description="User's organization")
+    
+    # Subscription details
+    symbols: List[str] = Field(default_factory=list, description="Subscribed stock symbols")
+    event_types: List[CorporateActionType] = Field(default_factory=list, description="Subscribed event types")
+    
+    # Notification preferences
+    notify_new_events: bool = Field(default=True, description="Notify on new events")
+    notify_status_changes: bool = Field(default=True, description="Notify on status changes")
+    notify_new_inquiries: bool = Field(default=True, description="Notify on new inquiries")
+    notify_inquiry_responses: bool = Field(default=True, description="Notify on inquiry responses")
+    
+    # Metadata
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class NotificationEvent(BaseModel):
+    """Notification event for push notifications"""
+    notification_id: str = Field(..., description="Unique notification identifier")
+    user_id: str = Field(..., description="Target user identifier")
+    
+    # Notification content
+    type: NotificationType = Field(..., description="Type of notification")
+    title: str = Field(..., description="Notification title")
+    message: str = Field(..., description="Notification message")
+    
+    # Related entities
+    event_id: Optional[str] = Field(None, description="Related corporate action event ID")
+    inquiry_id: Optional[str] = Field(None, description="Related inquiry ID")
+    
+    # Delivery
+    sent_at: Optional[datetime] = Field(None, description="When notification was sent")
+    read_at: Optional[datetime] = Field(None, description="When notification was read")
+    acknowledged_at: Optional[datetime] = Field(None, description="When notification was acknowledged")
+    
+    # Metadata
+    created_at: datetime = Field(default_factory=datetime.utcnow)
