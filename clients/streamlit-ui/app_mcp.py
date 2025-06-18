@@ -50,6 +50,16 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# Initialize session state for inquiry management
+if "selected_event_for_inquiry" not in st.session_state:
+    st.session_state.selected_event_for_inquiry = None
+if "current_user_id" not in st.session_state:
+    st.session_state.current_user_id = "demo_user_001"
+if "current_user_name" not in st.session_state:
+    st.session_state.current_user_name = "Demo User"
+if "current_organization" not in st.session_state:
+    st.session_state.current_organization = "Demo Organization"
+
 # Official MCP client for MCP servers
 class SimpleMCPClient:
     """Official MCP Python SDK client to communicate with MCP servers"""
@@ -270,6 +280,105 @@ class SimpleMCPClient:
         # If result is a dict, return as-is (likely an error)
         return result
 
+    # Inquiry Management Functions
+    def create_inquiry(self, event_id: str, user_id: str, user_name: str, organization: str, 
+                        subject: str, description: str, priority: str = "MEDIUM") -> Dict[str, Any]:
+        """Create a new inquiry using MCP client"""
+        result = self._call_tool(
+            self.servers['rag'],
+            "create_inquiry_tool",
+            {
+                "event_id": event_id,
+                "user_id": user_id,
+                "user_name": user_name,
+                "organization": organization,
+                "subject": subject,
+                "description": description,
+                "priority": priority
+            }
+        )
+        # If result is a string (successful), parse as JSON
+        if isinstance(result, str):
+            try:
+                return json.loads(result)
+            except:
+                return {"success": False, "error": "Failed to parse response"}
+        # If result is a dict, it's an error response
+        return result
+
+    def get_inquiries(self, event_id: str) -> Dict[str, Any]:
+        """Get all inquiries for a specific event"""
+        result = self._call_tool(
+            self.servers['rag'],
+            "get_inquiries_tool",
+            {"event_id": event_id}
+        )
+        # If result is a string (successful), parse as JSON
+        if isinstance(result, str):
+            try:
+                return json.loads(result)
+            except:
+                return {"inquiries": [], "count": 0}
+        # If result is a dict, it's an error response
+        return result
+
+    def get_user_inquiries(self, event_id: str, user_id: str) -> Dict[str, Any]:
+        """Get user's inquiries for a specific event"""
+        result = self._call_tool(
+            self.servers['rag'],
+            "get_user_inquiries_tool",
+            {
+                "event_id": event_id,
+                "user_id": user_id
+            }
+        )
+        # If result is a string (successful), parse as JSON
+        if isinstance(result, str):
+            try:
+                return json.loads(result)
+            except:
+                return {"inquiries": [], "count": 0}
+        # If result is a dict, it's an error response
+        return result
+
+    def update_inquiry(self, inquiry_id: str, **updates) -> Dict[str, Any]:
+        """Update an existing inquiry"""
+        result = self._call_tool(
+            self.servers['rag'],
+            "update_inquiry_tool",
+            {
+                "inquiry_id": inquiry_id,
+                **updates
+            }
+        )
+        # If result is a string (successful), parse as JSON
+        if isinstance(result, str):
+            try:
+                return json.loads(result)
+            except:
+                return {"success": False, "error": "Failed to parse response"}
+        # If result is a dict, it's an error response
+        return result
+
+    def delete_inquiry(self, inquiry_id: str, user_id: str) -> Dict[str, Any]:
+        """Delete an inquiry (user's own only)"""
+        result = self._call_tool(
+            self.servers['rag'],
+            "delete_inquiry_tool",
+            {
+                "inquiry_id": inquiry_id,
+                "user_id": user_id
+            }
+        )
+        # If result is a string (successful), parse as JSON
+        if isinstance(result, str):
+            try:
+                return json.loads(result)
+            except:
+                return {"success": False, "error": "Failed to parse response"}
+        # If result is a dict, it's an error response
+        return result
+
 # Initialize client
 @st.cache_resource
 def get_client():
@@ -427,6 +536,65 @@ st.markdown("""
         width: fit-content;
         margin: auto;
     }
+                /* Add these inquiry-specific styles */
+    .inquiry-card {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 1rem;
+        margin: 0.5rem 0;
+        border-left: 4px solid #007bff;
+    }
+    .inquiry-priority-high { border-left-color: #dc3545; }
+    .inquiry-priority-urgent { border-left-color: #fd7e14; }
+    .inquiry-priority-medium { border-left-color: #ffc107; }
+    .inquiry-priority-low { border-left-color: #28a745; }
+    
+    .inquiry-status-open { background-color: #fff3cd; }
+    .inquiry-status-in_review { background-color: #d1ecf1; }
+    .inquiry-status-responded { background-color: #d4edda; }
+    .inquiry-status-resolved { background-color: #d4edda; }
+    .inquiry-status-closed { background-color: #f8d7da; }
+    
+    .inquiry-button {
+        margin: 0.25rem;
+        padding: 0.375rem 0.75rem;
+        border-radius: 0.375rem;
+        border: 1px solid transparent;
+        font-size: 0.875rem;
+        font-weight: 500;
+        text-align: center;
+        cursor: pointer;
+        text-decoration: none;
+        display: inline-block;
+    }
+    .btn-create { 
+        background-color: #28a745; 
+        color: white; 
+        border-color: #28a745;
+    }
+    .btn-create:hover {
+        background-color: #218838;
+        border-color: #1e7e34;
+    }
+    .btn-view { 
+        background-color: #007bff; 
+        color: white;
+        border-color: #007bff;
+    }
+    .btn-view:hover {
+        background-color: #0069d9;
+        border-color: #0062cc;
+    }
+    .btn-edit { 
+        background-color: #ffc107; 
+        color: #212529;
+        border-color: #ffc107;
+    }
+    .btn-edit:hover {
+        background-color: #e0a800;
+        border-color: #d39e00;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -557,6 +725,323 @@ def main():
         show_analytics_page()  # Moved old dashboard content here
     elif page == "Administrator":
         show_administrator_page()  
+    
+# Inquiry Management Functions - Pure MCP Implementation
+def create_inquiry_mcp(event_id: str, subject: str, description: str, priority: str = "MEDIUM") -> Dict[str, Any]:
+    """Create a new inquiry using MCP client"""
+    if not client:
+        return {"success": False, "error": "MCP client not available"}
+    
+    try:
+        result = client.create_inquiry(
+            event_id=event_id,
+            user_id=st.session_state.current_user_id,
+            user_name=st.session_state.current_user_name,
+            organization=st.session_state.current_organization,
+            subject=subject,
+            description=description,
+            priority=priority
+        )
+        return result
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+def get_inquiries_mcp(event_id: str) -> List[Dict[str, Any]]:
+    """Get inquiries for an event using MCP client"""
+    if not client:
+        return []
+    
+    try:
+        result = client.get_inquiries(event_id)
+        return result.get("inquiries", [])
+    except Exception as e:
+        st.error(f"Error fetching inquiries: {str(e)}")
+        return []
+
+def get_user_inquiries_mcp(event_id: str, user_id: str) -> List[Dict[str, Any]]:
+    """Get user's inquiries for an event using MCP client"""
+    if not client:
+        return []
+    
+    try:
+        result = client.get_user_inquiries(event_id, user_id)
+        return result.get("inquiries", [])
+    except Exception as e:
+        st.error(f"Error fetching user inquiries: {str(e)}")
+        return []
+
+def update_inquiry_mcp(inquiry_id: str, **updates) -> Dict[str, Any]:
+    """Update an inquiry using MCP client"""
+    if not client:
+        return {"success": False, "error": "MCP client not available"}
+    
+    try:
+        result = client.update_inquiry(inquiry_id, **updates)
+        return result
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+def delete_inquiry_mcp(inquiry_id: str, user_id: str) -> Dict[str, Any]:
+    """Delete an inquiry using MCP client"""
+    if not client:
+        return {"success": False, "error": "MCP client not available"}
+    
+    try:
+        result = client.delete_inquiry(inquiry_id, user_id)
+        return result
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+def show_inquiry_modal_create(event_data: Dict[str, Any]):
+    """Show Create Inquiry modal"""
+    st.subheader(f"🆕 Create New Inquiry for {event_data.get('issuer_name', 'N/A')} ({event_data.get('security', {}).get('symbol', 'N/A')})")
+    
+    with st.form(f"create_inquiry_{event_data['event_id']}"):
+        st.info(f"**Event:** {event_data.get('description', 'N/A')}")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            subject = st.text_input("Subject", placeholder="Brief description of your inquiry")
+            priority = st.selectbox("Priority", ["LOW", "MEDIUM", "HIGH", "URGENT"], index=1)
+        
+        with col2:
+            st.text_input("Your Name", value=st.session_state.current_user_name, disabled=True)
+            st.text_input("Organization", value=st.session_state.current_organization, disabled=True)
+        
+        description = st.text_area("Detailed Description", height=100, 
+                                 placeholder="Provide detailed information about your inquiry...")
+        
+        col1, col2, col3 = st.columns([1, 1, 1])
+        with col1:
+            if st.form_submit_button("Create Inquiry", type="primary"):
+                if subject and description:
+                    with st.spinner("Creating inquiry..."):
+                        result = create_inquiry_mcp(
+                            event_data['event_id'], subject, description, priority
+                        )
+                        
+                        if result.get("success"):
+                            st.success(f"✅ Inquiry created successfully! ID: {result.get('inquiry_id')}")
+                            # Close modal and return to dashboard
+                            st.session_state.selected_event_for_inquiry = None
+                            if 'inquiry_modal_type' in st.session_state:
+                                del st.session_state.inquiry_modal_type
+                            # Add a small delay to show the success message before redirecting
+                            st.balloons()  # Visual feedback
+                            # Use st.rerun() to refresh and go back to dashboard
+                            st.rerun()
+                        else:
+                            st.error(f"❌ Failed to create inquiry: {result.get('error')}")
+                else:
+                    st.error("Please fill in both subject and description")
+        
+        with col3:
+            if st.form_submit_button("Cancel"):
+                st.session_state.selected_event_for_inquiry = None
+                if 'inquiry_modal_type' in st.session_state:
+                    del st.session_state.inquiry_modal_type
+                st.rerun()
+
+def show_inquiry_modal_edit(event_data: Dict[str, Any]):
+    """Show Edit Inquiry modal for user's own inquiries"""
+    st.subheader(f"✏️ Edit Your Inquiries for {event_data.get('issuer_name', 'N/A')} ({event_data.get('security', {}).get('symbol', 'N/A')})")
+    
+    user_inquiries = get_user_inquiries_mcp(
+        event_data['event_id'], 
+        st.session_state.current_user_id
+    )
+    
+    if user_inquiries:
+        st.info(f"You have {len(user_inquiries)} inquiries for this corporate action")
+        
+        # Select inquiry to edit
+        inquiry_options = {f"{inq['subject']} (ID: {inq['inquiry_id']})": inq for inq in user_inquiries}
+        selected_inquiry_key = st.selectbox("Select Inquiry to Edit", list(inquiry_options.keys()))
+        
+        if selected_inquiry_key:
+            selected_inquiry = inquiry_options[selected_inquiry_key]
+            
+            # Only allow editing if status is OPEN or ACKNOWLEDGED
+            if selected_inquiry.get('status') in ['OPEN', 'ACKNOWLEDGED']:
+                with st.form(f"edit_inquiry_{selected_inquiry['inquiry_id']}"):
+                    st.info(f"**Inquiry ID:** {selected_inquiry['inquiry_id']}")
+                    st.info(f"**Current Status:** {selected_inquiry.get('status', 'N/A')}")
+                    st.info(f"**Created:** {selected_inquiry.get('created_at', 'N/A')}")
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        new_subject = st.text_input("Subject", value=selected_inquiry.get('subject', ''))
+                        new_priority = st.selectbox("Priority", 
+                                                   ["LOW", "MEDIUM", "HIGH", "URGENT"],
+                                                   index=["LOW", "MEDIUM", "HIGH", "URGENT"].index(selected_inquiry.get('priority', 'MEDIUM')))
+                    
+                    with col2:
+                        st.text_input("Your Name", value=st.session_state.current_user_name, disabled=True)
+                        st.text_input("Organization", value=st.session_state.current_organization, disabled=True)
+                    
+                    new_description = st.text_area("Description", 
+                                                  value=selected_inquiry.get('description', ''),
+                                                  height=100)
+                    
+                    col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
+                    with col1:
+                        if st.form_submit_button("Update Inquiry", type="primary"):
+                            if new_subject and new_description:
+                                with st.spinner("Updating inquiry..."):
+                                    result = update_inquiry_mcp(
+                                        selected_inquiry['inquiry_id'],
+                                        subject=new_subject,
+                                        description=new_description,
+                                        priority=new_priority
+                                    )
+                                    print(result)
+                                    if result.get("success"):
+                                        st.success("✅ Inquiry updated successfully!")
+                                        # Close modal and return to dashboard
+                                        st.session_state.selected_event_for_inquiry = None
+                                        if 'inquiry_modal_type' in st.session_state:
+                                            del st.session_state.inquiry_modal_type
+                                        # Visual feedback
+                                        st.balloons()
+                                        # Return to dashboard
+                                        st.rerun()
+                                    else:
+                                        st.error(f"❌ Failed to update inquiry: {result.get('error')}")
+                            else:
+                                st.error("Please fill in both subject and description")
+                    
+                    with col2:
+                        if st.form_submit_button("Delete Inquiry", type="secondary"):
+                            with st.spinner("Deleting inquiry..."):
+                                result = delete_inquiry_mcp(
+                                    selected_inquiry['inquiry_id'],
+                                    st.session_state.current_user_id
+                                )
+                                
+                                if result.get("success"):
+                                    st.success("✅ Inquiry deleted successfully!")
+                                    # Close modal and return to dashboard
+                                    st.session_state.selected_event_for_inquiry = None
+                                    if 'inquiry_modal_type' in st.session_state:
+                                        del st.session_state.inquiry_modal_type
+                                    # Visual feedback for deletion
+                                    st.snow()  # Different visual feedback for deletion
+                                    # Return to dashboard
+                                    st.rerun()
+                                else:
+                                    st.error(f"❌ Failed to delete inquiry: {result.get('error')}")
+                    
+                    with col4:
+                        if st.form_submit_button("Cancel"):
+                            st.session_state.selected_event_for_inquiry = None
+                            if 'inquiry_modal_type' in st.session_state:
+                                del st.session_state.inquiry_modal_type
+                            st.rerun()
+            else:
+                st.warning(f"Cannot edit inquiry with status: {selected_inquiry.get('status')}. Only OPEN and ACKNOWLEDGED inquiries can be edited.")
+                
+                if st.button("Close"):
+                    st.session_state.selected_event_for_inquiry = None
+                    if 'inquiry_modal_type' in st.session_state:
+                        del st.session_state.inquiry_modal_type
+                    st.rerun()
+    else:
+        st.info("You have no inquiries for this corporate action yet.")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("Create First Inquiry"):
+                st.session_state.inquiry_modal_type = 'create'
+                st.rerun()
+        
+        with col2:
+            if st.button("Close"):
+                st.session_state.selected_event_for_inquiry = None
+                if 'inquiry_modal_type' in st.session_state:
+                    del st.session_state.inquiry_modal_type
+                st.rerun()
+
+def show_inquiry_modal_view(event_data: Dict[str, Any]):
+    """Show View Inquiries modal"""
+    st.subheader(f"👁️ View All Inquiries for {event_data.get('issuer_name', 'N/A')} ({event_data.get('security', {}).get('symbol', 'N/A')})")
+    
+    inquiries = get_inquiries_mcp(event_data['event_id'])
+    
+    if inquiries:
+        st.info(f"Found {len(inquiries)} inquiries for this corporate action")
+        
+        # Filter options
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            status_filter = st.selectbox("Filter by Status", 
+                                       ["All"] + ["OPEN", "ACKNOWLEDGED", "IN_REVIEW", "RESPONDED", "ESCALATED", "RESOLVED", "CLOSED"])
+        with col2:
+            priority_filter = st.selectbox("Filter by Priority", 
+                                         ["All"] + ["LOW", "MEDIUM", "HIGH", "URGENT"])
+        with col3:
+            user_filter = st.selectbox("Filter by User", 
+                                     ["All"] + list(set([inq.get('user_name', 'Unknown') for inq in inquiries])))
+        
+        # Apply filters
+        filtered_inquiries = inquiries
+        if status_filter != "All":
+            filtered_inquiries = [inq for inq in filtered_inquiries if inq.get('status') == status_filter]
+        if priority_filter != "All":
+            filtered_inquiries = [inq for inq in filtered_inquiries if inq.get('priority') == priority_filter]
+        if user_filter != "All":
+            filtered_inquiries = [inq for inq in filtered_inquiries if inq.get('user_name') == user_filter]
+        
+        st.markdown("---")
+        
+        # Display inquiries
+        for inquiry in filtered_inquiries:
+            with st.container():
+                # Color coding based on priority and status
+                priority_color = {
+                    "LOW": "#28a745", 
+                    "MEDIUM": "#ffc107", 
+                    "HIGH": "#fd7e14", 
+                    "URGENT": "#dc3545"
+                }.get(inquiry.get('priority', 'MEDIUM'), "#ffc107")
+                
+                status_color = {
+                    "OPEN": "#17a2b8",
+                    "ACKNOWLEDGED": "#6c757d", 
+                    "IN_REVIEW": "#007bff",
+                    "RESPONDED": "#28a745",
+                    "ESCALATED": "#dc3545",
+                    "RESOLVED": "#20c997",
+                    "CLOSED": "#6c757d"
+                }.get(inquiry.get('status', 'OPEN'), "#17a2b8")
+                
+                st.markdown(f"""
+                <div style="border-left: 4px solid {priority_color}; padding: 1rem; margin: 0.5rem 0; background: #f8f9fa; border-radius: 5px;">
+                    <h4>📋 {inquiry.get('subject', 'No Subject')}</h4>
+                    <p>
+                        <span style="background: {priority_color}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; font-weight: bold;">
+                            {inquiry.get('priority', 'N/A')}
+                        </span>
+                        <span style="background: {status_color}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; font-weight: bold; margin-left: 0.5rem;">
+                            {inquiry.get('status', 'N/A')}
+                        </span>
+                    </p>
+                    <p><strong>User:</strong> {inquiry.get('user_name', 'N/A')} ({inquiry.get('organization', 'N/A')})</p>
+                    <p><strong>Created:</strong> {inquiry.get('created_at', 'N/A')} | 
+                       <strong>Updated:</strong> {inquiry.get('updated_at', 'N/A')}</p>
+                    <p><strong>Description:</strong> {inquiry.get('description', 'N/A')}</p>
+                    {f"<p><strong>Response:</strong> {inquiry.get('response', '')}</p>" if inquiry.get('response') else ""}
+                    {f"<p><strong>Resolution Notes:</strong> {inquiry.get('resolution_notes', '')}</p>" if inquiry.get('resolution_notes') else ""}
+                </div>
+                """, unsafe_allow_html=True)
+    else:
+        st.info("No inquiries found for this corporate action")
+    
+    # Close button
+    if st.button("Close View", type="primary"):
+        st.session_state.selected_event_for_inquiry = None
+        if 'inquiry_modal_type' in st.session_state:
+            del st.session_state.inquiry_modal_type
+        st.rerun()
 
 def show_rag_assistant():
     """Display RAG assistant interface with enhanced chat history and both general and subscription-based RAG"""
@@ -1546,6 +2031,21 @@ def show_dashboard():
     if "subscriptions_loaded" not in st.session_state:
         st.session_state.subscriptions_loaded = False
     
+    # Handle inquiry modal display first
+    if st.session_state.selected_event_for_inquiry:
+        event_data = st.session_state.selected_event_for_inquiry
+        modal_type = st.session_state.get('inquiry_modal_type', 'create')
+        
+        if modal_type == 'create':
+            show_inquiry_modal_create(event_data)
+            return
+        elif modal_type == 'view':
+            show_inquiry_modal_view(event_data)
+            return
+        elif modal_type == 'edit':
+            show_inquiry_modal_edit(event_data)
+            return
+
     # Load subscriptions from database on first load
     if not st.session_state.subscriptions_loaded and client:
         try:
@@ -1578,8 +2078,8 @@ def show_dashboard():
             index=0 if st.session_state.user_role == "CONSUMER" else 1
         )
     
-    with col1:
-        st.markdown("### 🚨 Welcome to the Enhanced Corporate Actions Process Workflow")
+    # with col1:
+    #     st.markdown("### 🚨 Welcome to the Enhanced Corporate Actions Process Workflow")
     
     # Subscription Management Section
     st.markdown("---")
@@ -1816,10 +2316,49 @@ def show_dashboard():
                         else:
                             st.success("✅ No open inquiries")
                         
-                        # Button to create new inquiry
-                        if st.button(f"❓ Create Inquiry", key=f"inquiry_{event.get('event_id', i)}"):
-                            st.session_state.create_inquiry_for = event
-                            st.rerun()
+                        # # Button to create new inquiry
+                        # if st.button(f"❓ Create Inquiry", key=f"inquiry_{event.get('event_id', i)}"):
+                        #     st.session_state.create_inquiry_for = event
+                        #     st.rerun()
+                        # Inquiry management buttons
+                        st.markdown("**🔧 Inquiry Actions**")
+                        
+                        # Create three columns for the buttons
+                        btn_col1, btn_col2, btn_col3 = st.columns(3)
+                        
+                        with btn_col1:
+                            if st.button("🆕", key=f"create_{event.get('event_id', i)}", 
+                                    help="Create new inquiry", use_container_width=True):
+                                st.session_state.selected_event_for_inquiry = event
+                                st.session_state.inquiry_modal_type = 'create'
+                                st.rerun()
+                        
+                        with btn_col2:
+                            if st.button("👁️", key=f"view_{event.get('event_id', i)}", 
+                                    help="View all inquiries", use_container_width=True):
+                                st.session_state.selected_event_for_inquiry = event
+                                st.session_state.inquiry_modal_type = 'view'
+                                st.rerun()
+                        
+                        with btn_col3:
+                            if st.button("✏️", key=f"edit_{event.get('event_id', i)}", 
+                                    help="Edit your inquiries", use_container_width=True):
+                                st.session_state.selected_event_for_inquiry = event
+                                st.session_state.inquiry_modal_type = 'edit'
+                                st.rerun()
+                        
+                        # Show inquiry count if available
+                        if client:
+                            try:
+                                inquiries_result = client.get_inquiries(event.get('event_id', ''))
+                                inquiry_count = len(inquiries_result.get("inquiries", []))
+                                if inquiry_count > 0:
+                                    st.markdown(f"<small>📋 {inquiry_count} inquiries</small>", unsafe_allow_html=True)
+                            except:
+                                pass
+                    
+                    st.markdown("---")
+
         else:
             st.info("📭 No upcoming corporate actions found for your subscribed symbols in the next 7 days.")
             
@@ -2077,7 +2616,7 @@ def show_process_workflow():
             with col1:
                 st.write(f"**Description:** {inquiry.get('description')}")
                 st.write(f"**User:** {inquiry.get('user_name')} ({inquiry.get('organization', 'Unknown')})")
-                st.write(f"**Created:** {inquiry.get('created_at', datetime.now()).strftime('%Y-%m-%d %H:%M')}")
+                st.write(f"**Created:** {inquiry.get('created_at', datetime.now())}")
                 
                 # Response form
                 response_key = f"response_{inquiry.get('inquiry_id')}"
@@ -2112,6 +2651,13 @@ def show_process_workflow():
                     inquiry['assigned_to'] = assigned_to if assigned_to != "None" else None
                     inquiry['updated_at'] = datetime.now()
                     
+                    result = update_inquiry_mcp(
+                            inquiry.get('inquiry_id'),
+                            status=new_status,
+                            response=response if response is not None else "",
+                            assigned_to=assigned_to if assigned_to != "None" else "",
+                            #updated_at=datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+                        )
                     # Simulate push notification
                     if new_status != inquiry.get('previous_status', 'OPEN'):
                         st.success(f"🔔 Notification sent to {inquiry.get('user_name')} about status change!")
@@ -2494,7 +3040,7 @@ def show_administrator_page():
                 with col1:
                     st.write(f"**Description:** {inquiry.get('description')}")
                     st.write(f"**User:** {inquiry.get('user_name')} ({inquiry.get('organization', 'Unknown')})")
-                    st.write(f"**Created:** {inquiry.get('created_at', datetime.now()).strftime('%Y-%m-%d %H:%M')}")
+                    st.write(f"**Created:** {inquiry.get('created_at', datetime.now())}")
                     
                     # Response form
                     response_key = f"response_{inquiry.get('inquiry_id')}"

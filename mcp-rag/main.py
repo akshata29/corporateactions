@@ -429,7 +429,7 @@ async def update_inquiry_tool(
         # Extract event_id from inquiry_id (format: INQ_EVENTID_timestamp)
         parts = inquiry_id.split('_')
         if len(parts) >= 3:
-            event_id = '_'.join(parts[1:-1])  # Everything between INQ_ and last timestamp
+            event_id = '_'.join(parts[1:-2])  # Everything between INQ_ and last timestamp
         else:
             return json.dumps({
                 "success": False,
@@ -579,7 +579,7 @@ async def delete_inquiry_tool(
         # Extract event_id from inquiry_id
         parts = inquiry_id.split('_')
         if len(parts) >= 3:
-            event_id = '_'.join(parts[1:-1])
+            event_id = '_'.join(parts[1:-2])
         else:
             return json.dumps({
                 "success": False,
