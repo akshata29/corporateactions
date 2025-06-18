@@ -595,6 +595,42 @@ st.markdown("""
         background-color: #e0a800;
         border-color: #d39e00;
     }
+            /* Enhanced button styling for disabled state */
+    .stButton > button:disabled {
+        background-color: #e9ecef !important;
+        color: #6c757d !important;
+        border-color: #dee2e6 !important;
+        cursor: not-allowed !important;
+        opacity: 0.65 !important;
+    }
+    
+    .stButton > button:disabled:hover {
+        background-color: #e9ecef !important;
+        color: #6c757d !important;
+        border-color: #dee2e6 !important;
+        transform: none !important;
+    }
+    
+    /* Status indicator styling */
+    .inquiry-status-indicator {
+        font-size: 0.75rem;
+        font-style: italic;
+        color: #6c757d;
+        margin-top: 0.25rem;
+    }
+    
+    .inquiry-status-open {
+        color: #28a745;
+        font-weight: 500;
+    }
+    
+    .inquiry-status-none {
+        color: #6c757d;
+    }
+    
+    .inquiry-status-closed {
+        color: #dc3545;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -727,6 +763,27 @@ def main():
         show_administrator_page()  
     
 # Inquiry Management Functions - Pure MCP Implementation
+def get_user_inquiry_status(event_id: str, user_id: str) -> Dict[str, Any]:
+    """Get user's inquiry status for a specific event"""
+    if not client:
+        return {"has_inquiries": False, "open_inquiries": [], "total_count": 0}
+    
+    try:
+        result = client.get_user_inquiries(event_id, user_id)
+        inquiries = result.get("inquiries", [])
+        
+        # Filter for open inquiries (editable status)
+        open_inquiries = [inq for inq in inquiries if inq.get('status') not in ['CLOSED', 'RESOLVED']]
+        
+        return {
+            "has_inquiries": len(inquiries) > 0,
+            "open_inquiries": open_inquiries,
+            "total_count": len(inquiries),
+            "editable_count": len(open_inquiries)
+        }
+    except Exception as e:
+        return {"has_inquiries": False, "open_inquiries": [], "total_count": 0, "error": str(e)}
+    
 def create_inquiry_mcp(event_id: str, subject: str, description: str, priority: str = "MEDIUM") -> Dict[str, Any]:
     """Create a new inquiry using MCP client"""
     if not client:
@@ -2321,19 +2378,38 @@ def show_dashboard():
                         #     st.session_state.create_inquiry_for = event
                         #     st.rerun()
                         # Inquiry management buttons
+                        # Inquiry management buttons with smart enable/disable logic
                         st.markdown("**🔧 Inquiry Actions**")
+                        
+                        # Get user's inquiry status for this event
+                        user_status = get_user_inquiry_status(
+                            event.get('event_id', ''), 
+                            st.session_state.current_user_id
+                        )
+                        
+                        has_inquiries = user_status.get("has_inquiries", False)
+                        open_inquiries_count = user_status.get("editable_count", 0)
+                        total_inquiries_count = user_status.get("total_count", 0)
                         
                         # Create three columns for the buttons
                         btn_col1, btn_col2, btn_col3 = st.columns(3)
                         
                         with btn_col1:
-                            if st.button("🆕", key=f"create_{event.get('event_id', i)}", 
-                                    help="Create new inquiry", use_container_width=True):
+                            # NEW button - disabled if user has open inquiries
+                            create_disabled = has_inquiries and open_inquiries_count > 0
+                            create_help = "You already have open inquiries for this event" if create_disabled else "Create new inquiry"
+                            
+                            if st.button("🆕", 
+                                    key=f"create_{event.get('event_id', i)}", 
+                                    help=create_help, 
+                                    use_container_width=True,
+                                    disabled=create_disabled):
                                 st.session_state.selected_event_for_inquiry = event
                                 st.session_state.inquiry_modal_type = 'create'
                                 st.rerun()
                         
                         with btn_col2:
+                            # VIEW button - always enabled
                             if st.button("👁️", key=f"view_{event.get('event_id', i)}", 
                                     help="View all inquiries", use_container_width=True):
                                 st.session_state.selected_event_for_inquiry = event
@@ -2341,21 +2417,38 @@ def show_dashboard():
                                 st.rerun()
                         
                         with btn_col3:
+                            # EDIT button - disabled if user has no open inquiries
+                            edit_disabled = not has_inquiries or open_inquiries_count == 0
+                            edit_help = "No editable inquiries found" if edit_disabled else f"Edit your {open_inquiries_count} open inquiries"
+
                             if st.button("✏️", key=f"edit_{event.get('event_id', i)}", 
-                                    help="Edit your inquiries", use_container_width=True):
+                                    help=edit_help, 
+                                    use_container_width=True,
+                                    disabled=edit_disabled):
                                 st.session_state.selected_event_for_inquiry = event
                                 st.session_state.inquiry_modal_type = 'edit'
                                 st.rerun()
                         
-                        # Show inquiry count if available
-                        if client:
-                            try:
-                                inquiries_result = client.get_inquiries(event.get('event_id', ''))
-                                inquiry_count = len(inquiries_result.get("inquiries", []))
-                                if inquiry_count > 0:
-                                    st.markdown(f"<small>📋 {inquiry_count} inquiries</small>", unsafe_allow_html=True)
-                            except:
-                                pass
+                        # Show inquiry status information
+                        if has_inquiries:
+                            if open_inquiries_count > 0:
+                                st.markdown(f"<small>📝 {open_inquiries_count} open, {total_inquiries_count} total</small>", 
+                                        unsafe_allow_html=True)
+                            else:
+                                st.markdown(f"<small>📋 {total_inquiries_count} closed inquiries</small>", 
+                                        unsafe_allow_html=True)
+                        else:
+                            st.markdown("<small>📭 No inquiries yet</small>", unsafe_allow_html=True)
+                        
+                        # # Show inquiry count if available
+                        # if client:
+                        #     try:
+                        #         inquiries_result = client.get_inquiries(event.get('event_id', ''))
+                        #         inquiry_count = len(inquiries_result.get("inquiries", []))
+                        #         if inquiry_count > 0:
+                        #             st.markdown(f"<small>📋 {inquiry_count} inquiries</small>", unsafe_allow_html=True)
+                        #     except:
+                        #         pass
                     
                     st.markdown("---")
 

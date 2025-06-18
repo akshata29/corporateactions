@@ -1324,6 +1324,588 @@ async def sse_health():
     """Health check endpoint"""
     return {"status": "healthy", "service": "Corporate Actions MCP RAG Server"}
 
+# Fix the HTTP endpoint wrappers - call the underlying functions, not the MCP tools
+@sse_app.post("/mcp/tools/get_subscription_tool")
+async def http_get_subscription_tool(request: dict):
+    """HTTP wrapper for get_subscription_tool"""
+    user_id = request.get("user_id")
+    if not user_id:
+        return {"error": "user_id is required"}
+    
+    # Call the underlying function directly
+    subscription = await get_user_subscription(user_id)
+    
+    result = {
+        "user_id": user_id,
+        "subscription": subscription,
+        "debug_info": {
+            "container_available": subscriptions_container is not None,
+            "cosmos_client_available": cosmos_client is not None,
+            "cosmos_database_available": cosmos_database is not None,
+            "clients_initialized": _clients_initialized
+        }
+    }
+    
+    return result
+
+@sse_app.post("/mcp/tools/get_inquiries_tool")
+async def http_get_inquiries_tool(request: dict):
+    """HTTP wrapper for get_inquiries_tool"""
+    event_id = request.get("event_id")
+    if not event_id:
+        return {"error": "event_id is required"}
+    
+    # Call the underlying function directly
+    inquiries = await get_inquiries_for_event(event_id)
+    
+    return {
+        "event_id": event_id,
+        "inquiries": inquiries,
+        "count": len(inquiries)
+    }
+
+@sse_app.post("/mcp/tools/get_upcoming_events_tool")
+async def http_get_upcoming_events_tool(request: dict):
+    """HTTP wrapper for get_upcoming_events_tool"""
+    user_id = request.get("user_id")
+    days_ahead = request.get("days_ahead", 7)
+    
+    if not user_id:
+        return {"error": "user_id is required"}
+    
+    # Get user subscription first
+    subscription = await get_user_subscription(user_id)
+    if not subscription:
+        return {
+            "error": "No subscription found for user",
+            "user_id": user_id
+        }
+    
+    subscribed_symbols = subscription.get("symbols", [])
+    if not subscribed_symbols:
+        return {
+            "error": "User has no subscribed symbols",
+            "user_id": user_id,
+            "subscription": subscription
+        }
+    
+    try:
+        from datetime import datetime, timedelta, date
+        
+        # Get upcoming events from AI Search using subscribed symbols
+        logger.info(f"Searching AI Search for upcoming events for symbols: {subscribed_symbols}")
+        
+        # Calculate date range
+        today = date.today()
+        end_date = today + timedelta(days=days_ahead)
+        
+        # Search for events in the subscribed symbols
+        search_result = await search_corporate_actions_from_ai_search(
+            search_text="*",
+            symbols=subscribed_symbols,
+            top=100
+        )
+        
+        subscribed_events = []
+        if search_result.get("results"):
+            for event in search_result["results"]:
+                try:
+                    # Check if event is within date range
+                    ex_date_str = event.get('ex_date')
+                    if ex_date_str:
+                        ex_date = datetime.fromisoformat(ex_date_str.replace('Z', '+00:00')).date()
+                        if today <= ex_date <= end_date:
+                            subscribed_events.append(event)
+                    else:
+                        # Include events without ex_date for now
+                        subscribed_events.append(event)
+                except Exception as e:
+                    logger.warning(f"Error processing event date: {e}")
+                    subscribed_events.append(event)
+        else:
+            # Fallback to sample data if no search results
+            logger.info("No search results found, using sample data")
+            subscribed_events = [
+                {
+                    "event_id": "AAPL_DIVIDEND_2025_Q2_001",
+                    "event_type": "DIVIDEND",
+                    "security": {"symbol": "AAPL"},
+                    "issuer_name": "Apple Inc.",
+                    "status": "ANNOUNCED",
+                    "announcement_date": "2025-06-10",
+                    "ex_date": "2025-06-20",
+                    "description": "$0.25 quarterly cash dividend declared",
+                    "event_details": {"dividend_amount": 0.25}
+                }
+            ]
+        
+        logger.info(f"Found {len(subscribed_events)} upcoming events for user {user_id}")
+    
+        # Add inquiries for each event
+        events_with_inquiries = []
+        for event in subscribed_events:
+            try:
+                inquiries = await get_inquiries_for_event(event["event_id"])
+                event_with_inquiries = dict(event)
+                event_with_inquiries["inquiries"] = inquiries
+                event_with_inquiries["inquiry_count"] = len(inquiries)
+                events_with_inquiries.append(event_with_inquiries)
+            except Exception as e:
+                logger.warning(f"Error getting inquiries for event {event.get('event_id')}: {e}")
+                event_with_inquiries = dict(event)
+                event_with_inquiries["inquiries"] = []
+                event_with_inquiries["inquiry_count"] = 0
+                events_with_inquiries.append(event_with_inquiries)
+        
+        # Sort events by ex_date
+        events_with_inquiries.sort(key=lambda x: x.get('ex_date', ''))
+        
+        return {
+            "user_id": user_id,
+            "days_ahead": days_ahead,
+            "date_range": {
+                "start_date": date.today().isoformat(),
+                "end_date": (date.today() + timedelta(days=days_ahead)).isoformat()
+            },
+            "subscription": {
+                "symbols": subscribed_symbols,
+                "user_name": subscription.get("user_name"),
+                "organization": subscription.get("organization")
+            },
+            "upcoming_events": events_with_inquiries,
+            "total_events": len(events_with_inquiries),
+            "total_inquiries": sum(event["inquiry_count"] for event in events_with_inquiries),
+            "data_source": search_result.get("data_source", "ai_search") if search_result and search_result.get("results") else "sample_data"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in get_upcoming_events: {e}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        return {
+            "error": str(e),
+            "user_id": user_id,
+            "fallback_message": "An error occurred while fetching upcoming events"
+        }
+
+@sse_app.post("/mcp/tools/create_inquiry_tool")
+async def http_create_inquiry_tool(request: dict):
+    """HTTP wrapper for create_inquiry_tool"""
+    required_fields = ["event_id", "user_id", "user_name", "organization", "subject", "description"]
+    for field in required_fields:
+        if not request.get(field):
+            return {"error": f"{field} is required"}
+    
+    # Call the underlying function directly
+    result = await create_inquiry(
+        event_id=request["event_id"],
+        user_id=request["user_id"],
+        user_name=request["user_name"],
+        organization=request["organization"],
+        subject=request["subject"],
+        description=request["description"],
+        priority=request.get("priority", "MEDIUM")
+    )
+    
+    return result
+
+@sse_app.post("/mcp/tools/update_inquiry_tool")
+async def http_update_inquiry_tool(request: dict):
+    """HTTP wrapper for update_inquiry_tool"""
+    inquiry_id = request.get("inquiry_id")
+    user_id = request.get("user_id")  # Add user_id for validation
+    
+    if not inquiry_id:
+        return {"error": "inquiry_id is required"}
+    if not user_id:
+        return {"error": "user_id is required"}
+    
+    try:
+        # Ensure client is valid
+        if not await ensure_cosmos_client():
+            return {
+                "success": False,
+                "error": "Database connection not available"
+            }
+        
+        if not inquiries_container:
+            return {
+                "success": False,
+                "error": "Database container not available"
+            }
+        
+        # Extract event_id from inquiry_id (format: INQ_EVENTID_timestamp)
+        parts = inquiry_id.split('_')
+        if len(parts) >= 3:
+            event_id = '_'.join(parts[1:-1])  # Reconstruct event_id
+        else:
+            return {
+                "success": False,
+                "error": "Invalid inquiry_id format"
+            }
+        
+        # Read existing inquiry
+        try:
+            existing_inquiry = await inquiries_container.read_item(inquiry_id, event_id)
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"Inquiry not found: {str(e)}"
+            }
+        
+        # Verify user owns this inquiry
+        if existing_inquiry.get("user_id") != user_id:
+            return {
+                "success": False,
+                "error": "You can only update your own inquiries"
+            }
+        
+        # Update only provided fields
+        updated = False
+        if request.get("subject") is not None:
+            existing_inquiry['subject'] = request["subject"]
+            updated = True
+        if request.get("description") is not None:
+            existing_inquiry['description'] = request["description"]
+            updated = True
+        if request.get("priority") is not None:
+            existing_inquiry['priority'] = request["priority"]
+            updated = True
+        
+        if not updated:
+            return {
+                "success": False,
+                "error": "No fields to update"
+            }
+        
+        # Update timestamp
+        existing_inquiry['updated_at'] = datetime.utcnow().isoformat()
+        
+        # Save updated inquiry
+        result = await inquiries_container.replace_item(inquiry_id, existing_inquiry)
+        
+        logger.info(f"Successfully updated inquiry {inquiry_id}")
+        
+        return {
+            "success": True,
+            "inquiry_id": inquiry_id,
+            "message": "Inquiry updated successfully"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error updating inquiry: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+@sse_app.post("/mcp/tools/get_user_inquiries_tool")
+async def http_get_user_inquiries_tool(request: dict):
+    """HTTP wrapper for get_user_inquiries_tool"""
+    event_id = request.get("event_id")
+    user_id = request.get("user_id")
+    
+    if not event_id or not user_id:
+        return {"error": "event_id and user_id are required"}
+    
+    try:
+        if not inquiries_container:
+            # Return sample data if container not available
+            sample_inquiries = [
+                {
+                    "id": f"INQ_{event_id}_sample",
+                    "inquiry_id": f"INQ_{event_id}_sample",
+                    "event_id": event_id,
+                    "user_id": user_id,
+                    "user_name": "Sample User",
+                    "subject": "Sample inquiry",
+                    "description": "This is a sample inquiry for testing",
+                    "priority": "MEDIUM",
+                    "status": "OPEN",
+                    "created_at": datetime.utcnow().isoformat()
+                }
+            ]
+            return {
+                "event_id": event_id,
+                "user_id": user_id,
+                "inquiries": sample_inquiries,
+                "count": len(sample_inquiries)
+            }
+        
+        query = """
+        SELECT * FROM c 
+        WHERE c.event_id = @event_id 
+        AND c.user_id = @user_id 
+        ORDER BY c.created_at DESC
+        """
+        parameters = [
+            {"name": "@event_id", "value": event_id},
+            {"name": "@user_id", "value": user_id}
+        ]
+        
+        inquiries = []
+        async for item in inquiries_container.query_items(query, parameters=parameters):
+            inquiries.append(item)
+        
+        return {
+            "event_id": event_id,
+            "user_id": user_id,
+            "inquiries": inquiries,
+            "count": len(inquiries)
+        }
+        
+    except Exception as e:
+        logger.error(f"Error retrieving user inquiries: {e}")
+        return {
+            "event_id": event_id,
+            "user_id": user_id,
+            "inquiries": [],
+            "count": 0,
+            "error": str(e)
+        }
+
+@sse_app.post("/mcp/tools/save_subscription_tool")
+async def http_save_subscription_tool(request: dict):
+    """HTTP wrapper for save_subscription_tool"""
+    required_fields = ["user_id", "user_name", "organization", "symbols"]
+    for field in required_fields:
+        if not request.get(field):
+            return {"error": f"{field} is required"}
+    
+    # Parse symbols from string to list
+    symbols_str = request["symbols"]
+    symbols_list = [s.strip().upper() for s in symbols_str.split(",") if s.strip()]
+    
+    event_types_str = request.get("event_types", "")
+    event_types_list = [e.strip().upper() for e in event_types_str.split(",") if e.strip()] if event_types_str else None
+    
+    # Call the underlying function directly
+    result = await save_user_subscription(
+        user_id=request["user_id"],
+        user_name=request["user_name"],
+        organization=request["organization"],
+        symbols=symbols_list,
+        event_types=event_types_list
+    )
+    
+    return result
+
+# Add this HTTP endpoint for search/RAG queries
+@sse_app.get("/rag-query")
+async def http_rag_query(
+    query: str,
+    max_results: int = 5,
+    include_comments: bool = True,
+    chat_history: str = "[]"
+):
+    """HTTP wrapper for RAG query functionality"""
+    try:
+        # Parse chat history
+        parsed_chat_history = []
+        if chat_history and chat_history != "[]":
+            try:
+                parsed_chat_history = json.loads(chat_history)
+            except Exception as e:
+                logger.warning(f"Failed to parse chat history: {e}")
+        
+        # Generate query embedding for vector search
+        logger.info(f"Processing RAG query: {query}")
+        query_embedding = await generate_embedding(query)
+        
+        # Perform vector search
+        search_results = await vector_search(query_embedding, max_results)
+        
+        # Generate RAG response using OpenAI with chat history
+        rag_response = await generate_rag_response(query, search_results, parsed_chat_history)
+        
+        return {
+            "answer": rag_response["answer"],
+            "sources": rag_response["sources"],
+            "query": query,
+            "total_found": len(search_results),
+            "data_source": "vector_search",
+            "confidence_score": rag_response.get("confidence_score", 0.5),
+            "query_intent": rag_response.get("query_intent", "information_request"),
+            "requires_visualization": rag_response.get("requires_visualization", False),
+            "visualization_suggestions": rag_response.get("visualization_suggestions", {})
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Error in rag_query: {e}")
+        # Fallback to keyword search if vector search fails
+        search_result = await search_corporate_actions_from_ai_search(
+            search_text=query,
+            top=max_results
+        )
+        
+        events = search_result.get("results", [])
+        if not events:
+            return {
+                "answer": f"I couldn't find any corporate action events related to '{query}'. Try using specific company names or stock symbols.",
+                "sources": [],
+                "query": query,
+                "error": str(e),
+                "data_source": "no_results"
+            }
+        
+        return {
+            "answer": f"I found {len(events)} corporate action events related to your query. (Note: Advanced AI analysis temporarily unavailable)",
+            "sources": events,
+            "query": query,
+            "error": str(e),
+            "data_source": "keyword_search_fallback"
+        }
+
+# Add this HTTP endpoint for corporate actions search
+@sse_app.get("/search-corporate-actions")
+async def http_search_corporate_actions(
+    query: str = "*",
+    status: str = None,
+    event_type: str = None,
+    symbols: str = None,
+    limit: int = 100,
+    offset: int = 0
+):
+    """HTTP wrapper for corporate actions search functionality"""
+    try:
+        # Parse symbols if provided
+        symbols_list = None
+        if symbols:
+            symbols_list = [s.strip().upper() for s in symbols.split(",") if s.strip()]
+        
+        # Parse event types if provided
+        event_types_list = None
+        if event_type:
+            event_types_list = [event_type.strip().upper()]
+        
+        # Parse status filter if provided
+        status_filter_list = None
+        if status:
+            status_filter_list = [status.strip().upper()]
+        
+        # Check if search client is available
+        if not await ensure_search_client():
+            logger.info("AI Search not available, returning sample events")
+            #events = get_sample_events()[:limit]
+            events = []
+            
+            # Apply basic filtering to sample data
+            if status:
+                events = [e for e in events if e.get("status", "").upper() == status.upper()]
+            if event_type:
+                events = [e for e in events if e.get("event_type", "").upper() == event_type.upper()]
+            if symbols_list:
+                events = [e for e in events if e.get("symbol", "").upper() in symbols_list]
+            
+            return {
+                "events": events,
+                "total_count": len(events),
+                "returned_count": len(events),
+                "data_source": "sample_data",
+                "query_info": {
+                    "search_text": query,
+                    "status_filter": status,
+                    "event_type_filter": event_type,
+                    "symbols_filter": symbols,
+                    "limit": limit,
+                    "offset": offset
+                }
+            }
+        
+        # Call the underlying search function
+        search_result = await search_corporate_actions_from_ai_search(
+            search_text=query if query != "*" else "*",
+            symbols=symbols_list,
+            event_types=event_types_list,
+            status_filter=status_filter_list,
+            top=limit,
+            skip=offset
+        )
+        
+        # Format response to match what the Teams bot expects
+        events = search_result.get("results", [])
+        
+        # Convert any non-serializable objects to dictionaries
+        serializable_events = []
+        for event in events:
+            if hasattr(event, '__dict__'):
+                # Convert object to dict if it's a custom object
+                serializable_events.append(event.__dict__)
+            elif isinstance(event, dict):
+                # Already a dict, just ensure all values are serializable
+                clean_event = {}
+                for key, value in event.items():
+                    if hasattr(value, '__dict__'):
+                        clean_event[key] = value.__dict__
+                    elif isinstance(value, (str, int, float, bool, list, dict)) or value is None:
+                        clean_event[key] = value
+                    else:
+                        clean_event[key] = str(value)
+                serializable_events.append(clean_event)
+            else:
+                # Convert other types to dict
+                serializable_events.append({"raw_data": str(event)})
+        
+        # If no results from AI Search, return sample data
+        if not serializable_events:
+            logger.info("No results from AI Search, returning sample events")
+            #serializable_events = get_sample_events()[:limit]
+            serializable_events = []
+            
+            # Apply basic filtering to sample data
+            if status:
+                serializable_events = [e for e in serializable_events if e.get("status", "").upper() == status.upper()]
+            if event_type:
+                serializable_events = [e for e in serializable_events if e.get("event_type", "").upper() == event_type.upper()]
+            if symbols_list:
+                serializable_events = [e for e in serializable_events if e.get("symbol", "").upper() in symbols_list]
+        
+        return {
+            "events": serializable_events,
+            "total_count": search_result.get("total_count", len(serializable_events)),
+            "returned_count": len(serializable_events),
+            "data_source": search_result.get("data_source", "ai_search"),
+            "query_info": {
+                "search_text": query,
+                "status_filter": status,
+                "event_type_filter": event_type,
+                "symbols_filter": symbols,
+                "limit": limit,
+                "offset": offset
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Error in search corporate actions: {e}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        
+        # Fallback to sample data
+        #sample_events = get_sample_events()[:limit]
+        sample_events = []
+        
+        # Apply basic filtering to sample data
+        if status:
+            sample_events = [e for e in sample_events if e.get("status", "").upper() == status.upper()]
+        if event_type:
+            sample_events = [e for e in sample_events if e.get("event_type", "").upper() == event_type.upper()]
+        if symbols_list:
+            sample_events = [e for e in sample_events if e.get("symbol", "").upper() in symbols_list]
+        
+        return {
+            "events": sample_events,
+            "total_count": len(sample_events),
+            "returned_count": len(sample_events),
+            "error": str(e),
+            "data_source": "sample_data_fallback",
+            "query_info": {
+                "search_text": query,
+                "status_filter": status,
+                "event_type_filter": event_type,
+                "symbols_filter": symbols,
+                "limit": limit,
+                "offset": offset
+            }
+        }
+    
 async def test_cosmos_connectivity():
     """Test Cosmos DB connectivity"""
     try:
@@ -1485,7 +2067,7 @@ async def search_corporate_actions_from_ai_search(
         async for result in results:
             # Get total count from first result
             if hasattr(results, 'get_count'):
-                total_count = results.get_count()
+                total_count = await results.get_count()
             
             # Convert search result to consistent format
             action = {

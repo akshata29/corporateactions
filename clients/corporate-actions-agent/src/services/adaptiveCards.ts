@@ -27,6 +27,531 @@ export interface RAGResponse {
 }
 
 /**
+ * Enhanced Adaptive Cards for Corporate Actions with Inquiry Management
+ */
+
+export function createDashboardCard(events: any[], inquiries: any[], userName: string): any {
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('en-US', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+    });
+
+    // Build events section
+    const eventsSection = events.slice(0, 5).map((event, index) => {
+        const symbol = event.security?.symbol || event.symbol || 'N/A';
+        const issuer = event.issuer_name || event.company_name || 'Unknown Company';
+        const eventType = event.event_type?.replace('_', ' ') || 'Event';
+        const status = event.status || 'Unknown';
+        const description = event.description || 'No description available';
+        
+        // Get inquiry count for this event
+        const eventInquiries = inquiries.filter(inq => inq.event_id === event.event_id);
+        const openInquiries = eventInquiries.filter(inq => ['OPEN', 'ACKNOWLEDGED'].includes(inq.status));
+        
+        return {
+            type: "Container",
+            items: [
+                {
+                    type: "ColumnSet",
+                    columns: [
+                        {
+                            type: "Column",
+                            width: "stretch",
+                            items: [
+                                {
+                                    type: "TextBlock",
+                                    text: `🏢 **${issuer} (${symbol})**`,
+                                    weight: "Bolder",
+                                    size: "Medium"
+                                },
+                                {
+                                    type: "TextBlock",
+                                    text: `📋 ${eventType} • ${getStatusEmoji(status)} ${status}`,
+                                    spacing: "None",
+                                    isSubtle: true
+                                },
+                                {
+                                    type: "TextBlock",
+                                    text: description,
+                                    spacing: "Small",
+                                    wrap: true,
+                                    maxLines: 2
+                                },
+                                ...(eventInquiries.length > 0 ? [{
+                                    type: "TextBlock",
+                                    text: `💬 ${eventInquiries.length} inquiries (${openInquiries.length} open)`,
+                                    spacing: "Small",
+                                    isSubtle: true,
+                                    size: "Small"
+                                }] : [])
+                            ]
+                        },
+                        {
+                            type: "Column",
+                            width: "auto",
+                            items: [
+                                {
+                                    type: "ActionSet",
+                                    actions: [
+                                        {
+                                            type: "Action.Submit",
+                                            title: "🆕",
+                                            data: {
+                                                action: "create_inquiry",
+                                                event_id: event.event_id,
+                                                company: issuer,
+                                                symbol: symbol
+                                            },
+                                            tooltip: openInquiries.length > 0 ? "You have open inquiries" : "Create new inquiry"
+                                        },
+                                        {
+                                            type: "Action.Submit",
+                                            title: "👁️",
+                                            data: {
+                                                action: "view_inquiries",
+                                                event_id: event.event_id,
+                                                company: issuer,
+                                                symbol: symbol
+                                            },
+                                            tooltip: "View all inquiries"
+                                        },
+                                        {
+                                            type: "Action.Submit",
+                                            title: "✏️",
+                                            data: {
+                                                action: "edit_inquiries",
+                                                event_id: event.event_id,
+                                                company: issuer,
+                                                symbol: symbol
+                                            },
+                                            tooltip: openInquiries.length > 0 ? `Edit ${openInquiries.length} open inquiries` : "No inquiries to edit"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ],
+            separator: index > 0,
+            spacing: "Medium"
+        };
+    });
+
+    return {
+        type: "AdaptiveCard",
+        version: "1.5",
+        body: [
+            {
+                type: "Container",
+                style: "emphasis",
+                items: [
+                    {
+                        type: "ColumnSet",
+                        columns: [
+                            {
+                                type: "Column",
+                                width: "stretch",
+                                items: [
+                                    {
+                                        type: "TextBlock",
+                                        text: "🏦 Corporate Actions Dashboard",
+                                        size: "Large",
+                                        weight: "Bolder",
+                                        color: "Light"
+                                    },
+                                    {
+                                        type: "TextBlock",
+                                        text: `Welcome back, ${userName}! • ${dateStr}`,
+                                        isSubtle: true,
+                                        color: "Light"
+                                    }
+                                ]
+                            },
+                            {
+                                type: "Column",
+                                width: "auto",
+                                items: [
+                                    {
+                                        type: "Image",
+                                        url: "https://img.icons8.com/fluency/48/dashboard-layout.png",
+                                        height: "40px"
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                type: "Container",
+                items: [
+                    {
+                        type: "ColumnSet",
+                        columns: [
+                            {
+                                type: "Column",
+                                width: "stretch",
+                                items: [
+                                    {
+                                        type: "TextBlock",
+                                        text: "📊 Quick Stats",
+                                        weight: "Bolder",
+                                        size: "Medium"
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        type: "FactSet",
+                        facts: [
+                            {
+                                title: "📈 Active Events",
+                                value: events.filter(e => ['ANNOUNCED', 'CONFIRMED'].includes(e.status)).length.toString()
+                            },
+                            {
+                                title: "💬 Total Inquiries",
+                                value: inquiries.length.toString()
+                            },
+                            {
+                                title: "📝 Open Inquiries",
+                                value: inquiries.filter(inq => ['OPEN', 'ACKNOWLEDGED'].includes(inq.status)).length.toString()
+                            },
+                            {
+                                title: "✅ Resolved",
+                                value: inquiries.filter(inq => inq.status === 'RESOLVED').length.toString()
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                type: "Container",
+                items: [
+                    {
+                        type: "TextBlock",
+                        text: "📋 Recent Corporate Actions",
+                        weight: "Bolder",
+                        size: "Medium",
+                        spacing: "Large"
+                    },
+                    {
+                        type: "TextBlock",
+                        text: "Click inquiry buttons to create (🆕), view (👁️), or edit (✏️) inquiries",
+                        isSubtle: true,
+                        size: "Small"
+                    },
+                    ...eventsSection
+                ]
+            }
+        ],
+        actions: [
+            {
+                type: "Action.Submit",
+                title: "🔄 Refresh Dashboard",
+                data: {
+                    action: "refresh_dashboard"
+                }
+            },
+            {
+                type: "Action.Submit",
+                title: "⚙️ Settings",
+                data: {
+                    action: "settings"
+                }
+            },
+            {
+                type: "Action.Submit",
+                title: "📞 Help",
+                data: {
+                    action: "help"
+                }
+            }
+        ]
+    };
+}
+
+export function createInquiryFormCard(eventData: any, action: 'create' | 'edit', inquiryData?: any): any {
+    const symbol = eventData.security?.symbol || eventData.symbol || 'N/A';
+    const issuer = eventData.issuer_name || eventData.company_name || 'Unknown Company';
+    const isEdit = action === 'edit';
+    
+    return {
+        type: "AdaptiveCard",
+        version: "1.5",
+        body: [
+            {
+                type: "Container",
+                style: "emphasis",
+                items: [
+                    {
+                        type: "TextBlock",
+                        text: `${isEdit ? '✏️ Edit Inquiry' : '🆕 Create New Inquiry'}`,
+                        size: "Large",
+                        weight: "Bolder",
+                        color: "Light"
+                    },
+                    {
+                        type: "TextBlock",
+                        text: `${issuer} (${symbol})`,
+                        isSubtle: true,
+                        color: "Light"
+                    }
+                ]
+            },
+            {
+                type: "Container",
+                items: [
+                    {
+                        type: "TextBlock",
+                        text: "📝 Inquiry Details",
+                        weight: "Bolder",
+                        size: "Medium"
+                    },
+                    {
+                        type: "Input.Text",
+                        id: "subject",
+                        label: "Subject",
+                        placeholder: "Brief description of your inquiry",
+                        value: inquiryData?.subject || "",
+                        isRequired: true
+                    },
+                    {
+                        type: "Input.ChoiceSet",
+                        id: "priority",
+                        label: "Priority",
+                        style: "compact",
+                        value: inquiryData?.priority || "MEDIUM",
+                        choices: [
+                            { title: "🟢 Low", value: "LOW" },
+                            { title: "🟡 Medium", value: "MEDIUM" },
+                            { title: "🟠 High", value: "HIGH" },
+                            { title: "🔴 Urgent", value: "URGENT" }
+                        ]
+                    },
+                    {
+                        type: "Input.Text",
+                        id: "description",
+                        label: "Description",
+                        placeholder: "Provide detailed information about your inquiry...",
+                        value: inquiryData?.description || "",
+                        isMultiline: true,
+                        isRequired: true
+                    }
+                ]
+            }
+        ],
+        actions: [
+            {
+                type: "Action.Submit",
+                title: isEdit ? "💾 Update Inquiry" : "✅ Create Inquiry",
+                style: "positive",
+                data: {
+                    action: isEdit ? "update_inquiry" : "submit_inquiry",
+                    event_id: eventData.event_id,
+                    inquiry_id: inquiryData?.inquiry_id,
+                    company: issuer,
+                    symbol: symbol
+                }
+            },
+            {
+                type: "Action.Submit",
+                title: "❌ Cancel",
+                data: {
+                    action: "cancel"
+                }
+            }
+        ]
+    };
+}
+
+export function createInquiriesListCard(inquiries: any[], eventData: any): any {
+    const symbol = eventData.security?.symbol || eventData.symbol || 'N/A';
+    const issuer = eventData.issuer_name || eventData.company_name || 'Unknown Company';
+    
+    const inquiryItems = inquiries.slice(0, 10).map((inquiry, index) => {
+        const priorityColor = getPriorityColor(inquiry.priority);
+        const statusColor = getStatusColor(inquiry.status);
+        
+        return {
+            type: "Container",
+            items: [
+                {
+                    type: "ColumnSet",
+                    columns: [
+                        {
+                            type: "Column",
+                            width: "stretch",
+                            items: [
+                                {
+                                    type: "TextBlock",
+                                    text: `📋 ${inquiry.subject || 'No Subject'}`,
+                                    weight: "Bolder",
+                                    wrap: true
+                                },
+                                {
+                                    type: "ColumnSet",
+                                    columns: [
+                                        {
+                                            type: "Column",
+                                            width: "auto",
+                                            items: [
+                                                {
+                                                    type: "TextBlock",
+                                                    text: `${getPriorityEmoji(inquiry.priority)} ${inquiry.priority}`,
+                                                    size: "Small",
+                                                    weight: "Bolder"
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            type: "Column",
+                                            width: "auto",
+                                            items: [
+                                                {
+                                                    type: "TextBlock",
+                                                    text: `${getStatusEmoji(inquiry.status)} ${inquiry.status}`,
+                                                    size: "Small",
+                                                    isSubtle: true
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    type: "TextBlock",
+                                    text: `👤 ${inquiry.user_name} (${inquiry.organization || 'N/A'})`,
+                                    size: "Small",
+                                    isSubtle: true
+                                },
+                                {
+                                    type: "TextBlock",
+                                    text: inquiry.description || 'No description',
+                                    wrap: true,
+                                    maxLines: 3,
+                                    size: "Small"
+                                },
+                                ...(inquiry.response ? [{
+                                    type: "TextBlock",
+                                    text: `💬 **Response:** ${inquiry.response}`,
+                                    wrap: true,
+                                    size: "Small",
+                                    color: "Good"
+                                }] : [])
+                            ]
+                        }
+                    ]
+                }
+            ],
+            separator: index > 0,
+            spacing: "Medium"
+        };
+    });
+
+    return {
+        type: "AdaptiveCard",
+        version: "1.5",
+        body: [
+            {
+                type: "Container",
+                style: "emphasis",
+                items: [
+                    {
+                        type: "TextBlock",
+                        text: "👁️ View Inquiries",
+                        size: "Large",
+                        weight: "Bolder",
+                        color: "Light"
+                    },
+                    {
+                        type: "TextBlock",
+                        text: `${issuer} (${symbol}) • ${inquiries.length} inquiries`,
+                        isSubtle: true,
+                        color: "Light"
+                    }
+                ]
+            },
+            {
+                type: "Container",
+                items: inquiryItems.length > 0 ? inquiryItems : [
+                    {
+                        type: "TextBlock",
+                        text: "📭 No inquiries found for this corporate action",
+                        horizontalAlignment: "Center",
+                        isSubtle: true
+                    }
+                ]
+            }
+        ],
+        actions: [
+            {
+                type: "Action.Submit",
+                title: "🔙 Back to Dashboard",
+                data: {
+                    action: "back_to_dashboard"
+                }
+            }
+        ]
+    };
+}
+
+// Helper functions for styling
+function getStatusEmoji(status: string): string {
+    const emojiMap: { [key: string]: string } = {
+        'ANNOUNCED': '📢',
+        'CONFIRMED': '✅', 
+        'COMPLETED': '🎯',
+        'PENDING': '⏳',
+        'CANCELLED': '❌',
+        'OPEN': '🟡',
+        'ACKNOWLEDGED': '🟠',
+        'IN_REVIEW': '🔵',
+        'RESPONDED': '🟢',
+        'ESCALATED': '🔴',
+        'RESOLVED': '✅',
+        'CLOSED': '⚫'
+    };
+    return emojiMap[status] || '📋';
+}
+
+function getPriorityEmoji(priority: string): string {
+    const emojiMap: { [key: string]: string } = {
+        'LOW': '🟢',
+        'MEDIUM': '🟡',
+        'HIGH': '🟠',
+        'URGENT': '🔴'
+    };
+    return emojiMap[priority] || '🟡';
+}
+
+function getPriorityColor(priority: string): string {
+    const colorMap: { [key: string]: string } = {
+        'LOW': 'Good',
+        'MEDIUM': 'Warning', 
+        'HIGH': 'Attention',
+        'URGENT': 'Destructive'
+    };
+    return colorMap[priority] || 'Default';
+}
+
+function getStatusColor(status: string): string {
+    const colorMap: { [key: string]: string } = {
+        'OPEN': 'Warning',
+        'ACKNOWLEDGED': 'Attention',
+        'IN_REVIEW': 'Accent',
+        'RESPONDED': 'Good',
+        'ESCALATED': 'Destructive',
+        'RESOLVED': 'Good',
+        'CLOSED': 'Default'
+    };
+    return colorMap[status] || 'Default';
+}
+
+/**
  * Get event type emoji
  */
 function getEventEmoji(eventType: string): string {
@@ -391,41 +916,38 @@ export function createHelpCard(): any {
         style: "emphasis",
         items: [
           {
-            type: "TextBlock",
-            text: "🤖 Corporate Actions AI Assistant",
-            weight: "Bolder",
-            size: "Large",
-            color: "Accent"
-          },
-          {
-            type: "TextBlock",
-            text: "I help you track and analyze corporate actions like dividends, stock splits, mergers, and more.",
-            wrap: true
-          }
-        ]
-      },
-      {
-        type: "Container",
-        spacing: "Medium",
-        items: [
-          {
-            type: "TextBlock",
-            text: "📋 Available Commands:",
-            weight: "Bolder",
-            size: "Medium"
-          },
-          {            type: "FactSet",
-            facts: [
-              { title: "/events", value: "List recent corporate actions" },
-              { title: "/search [query]", value: "AI-powered search for events" },
-              { title: "/subscribe [symbols]", value: "Get notifications for companies" },
-              { title: "/unsubscribe [symbols]", value: "Stop notifications" },
-              { title: "/settings", value: "View notification preferences" },
-              { title: "/toggle [setting]", value: "Toggle notification types" },
-              { title: "/status", value: "Check system status" },
-              { title: "/test [type]", value: "Test notification system (dev)" },
-              { title: "/notifications check", value: "Check Pending Notifications" },
-              { title: "/help", value: "Show this help message" }
+            type: "ColumnSet",
+            columns: [
+              {
+                type: "Column",
+                width: "auto",
+                items: [
+                  {
+                    type: "TextBlock",
+                    text: "🤖",
+                    size: "ExtraLarge"
+                  }
+                ]
+              },
+              {
+                type: "Column",
+                width: "stretch",
+                items: [
+                  {
+                    type: "TextBlock",
+                    text: "Corporate Actions AI Assistant",
+                    weight: "Bolder",
+                    size: "Large",
+                    color: "Light"
+                  },
+                  {
+                    type: "TextBlock",
+                    text: "Enhanced with inquiry management and real-time dashboard",
+                    color: "Light",
+                    isSubtle: true
+                  }
+                ]
+              }
             ]
           }
         ]
@@ -436,41 +958,139 @@ export function createHelpCard(): any {
         items: [
           {
             type: "TextBlock",
-            text: "💡 Example Queries:",
+            text: "🏠 **Dashboard & Inquiry Management**",
             weight: "Bolder",
-            size: "Medium"
+            size: "Medium",
+            color: "Accent"
           },
           {
             type: "TextBlock",
-            text: "• \"What dividend events happened this week?\"\n• \"Show me upcoming stock splits\"\n• \"Analyze merger activity in tech sector\"\n• \"What's new with Apple?\"",
-            wrap: true
+            text: "• Type `dashboard` or `home` for interactive corporate actions dashboard\n• 📝 Create, view, and edit inquiries directly from the dashboard\n• 🚦 Smart controls prevent duplicate open inquiries\n• 🔄 Real-time status updates and personalized insights",
+            wrap: true,
+            spacing: "Small"
           }
         ]
-      },      {
-        type: "ActionSet",
-        actions: [
+      },
+      {
+        type: "Container",
+        spacing: "Medium",
+        items: [
           {
-            type: "Action.Submit",
-            title: "📊 View Recent Events",
-            data: {
-              action: "viewEvents"
-            }
+            type: "TextBlock",
+            text: "📋 **Available Commands**",
+            weight: "Bolder",
+            size: "Medium",
+            color: "Accent"
           },
           {
-            type: "Action.Submit",
-            title: "🔍 Search Events",
-            data: {
-              action: "searchPrompt"
-            }
-          },
-          {
-            type: "Action.Submit",
-            title: "🧪 Test Notifications",
-            data: {
-              action: "testNotifications"
-            }
+            type: "FactSet",
+            facts: [
+              { title: "dashboard, home", value: "Interactive dashboard with inquiry management" },
+              { title: "/search [query]", value: "AI-powered search with confidence scoring" },
+              { title: "/events", value: "Recent corporate actions with smart filtering" },
+              { title: "/inquiries list", value: "Show recent events with IDs for reference" },
+              { title: "/inquiries [event_id]", value: "View all inquiries for a specific event" },
+              { title: "/create-inquiry [event_id]", value: "Create new inquiry for an event" },
+              { title: "/edit-inquiry [inquiry_id]", value: "Edit your existing inquiry" },
+              { title: "/edit-inquiry", value: "Show your inquiries to select for editing" },
+              { title: "/subscribe [symbols]", value: "Multi-symbol smart subscriptions" },
+              { title: "/unsubscribe [symbols]", value: "Remove specific symbol notifications" },
+              { title: "/notifications settings", value: "Configure notification preferences" },
+              { title: "/notifications history", value: "View recent notification history" },
+              { title: "/comment [id] [text]", value: "Add structured comments to events" },
+              { title: "/status", value: "Check MCP server health and capabilities" },
+              { title: "/help", value: "Show this comprehensive help guide" }
+            ]
           }
         ]
+      },
+      {
+        type: "Container",
+        spacing: "Medium",
+        items: [
+          {
+            type: "TextBlock",
+            text: "📋 **Inquiry Management Rules**",
+            weight: "Bolder",
+            size: "Medium",
+            color: "Attention"
+          },
+          {
+            type: "TextBlock",
+            text: "• 🚫 **One Active Inquiry Rule**: Only one open inquiry per event per user\n• ✅ **Resolution Required**: Resolve existing inquiries before creating new ones\n• ✏️ **Edit Anytime**: Modify your inquiries until they're resolved\n• 👥 **View All**: See all inquiries but only edit your own",
+            wrap: true,
+            spacing: "Small"
+          }
+        ]
+      },
+      {
+        type: "Container",
+        spacing: "Medium",
+        items: [
+          {
+            type: "TextBlock",
+            text: "💡 **Example Queries**",
+            weight: "Bolder",
+            size: "Medium",
+            color: "Accent"
+          },
+          {
+            type: "TextBlock",
+            text: "• \"What dividend events happened this week with amounts over $2?\"\n• \"Show me upcoming stock splits and their ratios\"\n• \"Analyze merger activity in the technology sector\"\n• \"Do I have any open inquiries for Apple events?\"\n• \"What's the status of my Tesla inquiry?\"",
+            wrap: true,
+            spacing: "Small"
+          }
+        ]
+      },
+      {
+        type: "Container",
+        spacing: "Medium",
+        items: [
+          {
+            type: "TextBlock",
+            text: "🎯 **Getting Started**",
+            weight: "Bolder",
+            size: "Medium",
+            color: "Good"
+          },
+          {
+            type: "TextBlock",
+            text: "1. Type `dashboard` to see the main interface\n2. Browse upcoming corporate actions\n3. Click \"🆕\" to create inquiries for events\n4. Use \"👁️\" to view all inquiries or \"✏️\" to edit yours\n5. Subscribe to symbols with `/subscribe AAPL,MSFT`",
+            wrap: true,
+            spacing: "Small"
+          }
+        ]
+      }
+    ],
+    actions: [
+      {
+        type: "Action.Submit",
+        title: "🏠 Open Dashboard",
+        style: "positive",
+        data: {
+          action: "refresh_dashboard"
+        }
+      },
+      {
+        type: "Action.Submit",
+        title: "📊 View Recent Events",
+        data: {
+          action: "view_events"
+        }
+      },
+      {
+        type: "Action.Submit",
+        title: "🔍 Search Events",
+        data: {
+          action: "search_prompt"
+        }
+      },
+      {
+        type: "Action.Submit",
+        title: "⚙️ Settings",
+        data: {
+          action: "settings"
+        }
       }
     ]
   };

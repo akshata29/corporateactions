@@ -419,4 +419,325 @@ export class MCPClientManager {
             };
         }
     }
+
+    /**
+     * Create a new inquiry for a corporate action event
+     */
+    async createInquiry(
+        eventId: string,
+        userId: string,
+        userName: string,
+        organization: string,
+        subject: string,
+        description: string,
+        priority: string = "MEDIUM"
+    ): Promise<any> {
+        try {
+            const response = await axios.post(`${this.baseUrls.rag}/mcp/tools/create_inquiry_tool`, {
+                event_id: eventId,
+                user_id: userId,
+                user_name: userName,
+                organization: organization,
+                subject: subject,
+                description: description,
+                priority: priority
+            }, {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                timeout: 15000
+            });
+
+            return response.data;
+        } catch (error: any) {
+            console.error('Create inquiry error:', error.message);
+            return {
+                success: false,
+                error: error.message || 'Failed to create inquiry'
+            };
+        }
+    }
+
+    /**
+     * Get all inquiries for a specific event
+     */
+    async getInquiries(eventId: string): Promise<any> {
+        try {
+            const response = await axios.post(`${this.baseUrls.rag}/mcp/tools/get_inquiries_tool`, {
+                event_id: eventId
+            }, {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                timeout: 15000
+            });
+
+            return response.data;
+        } catch (error: any) {
+            console.error('Get inquiries error:', error.message);
+            return {
+                inquiries: [],
+                count: 0,
+                error: error.message || 'Failed to get inquiries'
+            };
+        }
+    }
+
+    /**
+     * Get user's inquiries for a specific event
+     */
+    async getUserInquiries(eventId: string, userId: string): Promise<any> {
+        try {
+            const response = await axios.post(`${this.baseUrls.rag}/mcp/tools/get_user_inquiries_tool`, {
+                event_id: eventId,
+                user_id: userId
+            }, {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                timeout: 15000
+            });
+
+            return response.data;
+        } catch (error: any) {
+            console.error('Get user inquiries error:', error.message);
+            return {
+                inquiries: [],
+                count: 0,
+                error: error.message || 'Failed to get user inquiries'
+            };
+        }
+    }
+
+    /**
+     * Update an existing inquiry
+     */
+    async updateInquiry(
+        inquiryId: string,
+        updates: {
+            subject?: string;
+            description?: string;
+            priority?: string;
+            status?: string;
+            response?: string;
+            resolution_notes?: string;
+            assigned_to?: string;
+        }
+    ): Promise<any> {
+        try {
+            const response = await axios.post(`${this.baseUrls.rag}/mcp/tools/update_inquiry_tool`, {
+                inquiry_id: inquiryId,
+                ...updates
+            }, {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                timeout: 15000
+            });
+
+            return response.data;
+        } catch (error: any) {
+            console.error('Update inquiry error:', error.message);
+            return {
+                success: false,
+                error: error.message || 'Failed to update inquiry'
+            };
+        }
+    }
+
+    /**
+     * Delete an inquiry (user's own only)
+     */
+    async deleteInquiry(inquiryId: string, userId: string): Promise<any> {
+        try {
+            const response = await axios.post(`${this.baseUrls.rag}/mcp/tools/delete_inquiry_tool`, {
+                inquiry_id: inquiryId,
+                user_id: userId
+            }, {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                timeout: 15000
+            });
+
+            return response.data;
+        } catch (error: any) {
+            console.error('Delete inquiry error:', error.message);
+            return {
+                success: false,
+                error: error.message || 'Failed to delete inquiry'
+            };
+        }
+    }
+
+    /**
+     * Get upcoming events for subscribed user symbols
+     */
+    async getUpcomingEvents(userId: string, daysAhead: number = 7): Promise<any> {
+        try {
+            const response = await axios.post(`${this.baseUrls.rag}/mcp/tools/get_upcoming_events_tool`, {
+                user_id: userId,
+                days_ahead: daysAhead
+            }, {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                timeout: 15000
+            });
+
+            return response.data;
+        } catch (error: any) {
+            console.error('Get upcoming events error:', error.message);
+            return {
+                upcoming_events: [],
+                total_events: 0,
+                error: error.message || 'Failed to get upcoming events'
+            };
+        }
+    }
+
+    /**
+     * Get all inquiries for a user across all their subscribed events
+     */
+    async getAllUserInquiries(userId: string): Promise<any> {
+        try {
+            // First, get the user's upcoming events
+            const eventsResult = await this.getUpcomingEvents(userId, 30); // Look back/forward 30 days
+            const events = eventsResult.upcoming_events || [];
+            
+            // Then get user inquiries for each event
+            const allInquiries: any[] = [];
+            for (const event of events) {
+                try {
+                    const inquiriesResult = await this.getUserInquiries(event.event_id, userId);
+                    if (inquiriesResult.inquiries && inquiriesResult.inquiries.length > 0) {
+                        allInquiries.push(...inquiriesResult.inquiries);
+                    }
+                } catch (error) {
+                    console.error(`Error getting inquiries for event ${event.event_id}:`, error);
+                }
+            }
+            
+            // Sort by creation date (newest first)
+            allInquiries.sort((a, b) => {
+                const dateA = new Date(a.created_at || 0);
+                const dateB = new Date(b.created_at || 0);
+                return dateB.getTime() - dateA.getTime();
+            });
+            
+            return {
+                inquiries: allInquiries,
+                count: allInquiries.length,
+                events_checked: events.length
+            };
+
+        } catch (error: any) {
+            console.error('Get all user inquiries error:', error.message);
+            return {
+                inquiries: [],
+                count: 0,
+                error: error.message || 'Failed to get user inquiries'
+            };
+        }
+    }
+    
+    /**
+     * Save user subscription to CosmosDB
+     */
+    /**
+     * Save user subscription to database
+     */
+    async saveSubscription(
+        userId: string,
+        userName: string,
+        organization: string,
+        symbols: string,
+        eventTypes?: string
+    ): Promise<any> {
+        try {
+            const response = await axios.post(`${this.baseUrls.rag}/mcp/tools/save_subscription_tool`, {
+                user_id: userId,
+                user_name: userName,
+                organization: organization,
+                symbols: symbols,
+                event_types: eventTypes || ""
+            }, {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                timeout: 15000
+            });
+
+            return response.data;
+        } catch (error: any) {
+            console.error('Error saving subscription:', error);
+            return {
+                success: false,
+                error: error.response?.data?.message || error.message || 'Unknown error'
+            };
+        }
+    }
+
+    /**
+     * Remove user subscription from database
+     */
+    async removeSubscription(userId: string): Promise<any> {
+        try {
+            // For now, we'll save an empty subscription to effectively remove it
+            // In a real implementation, you might want a dedicated delete endpoint
+            const response = await axios.post(`${this.baseUrls.rag}/mcp/tools/save_subscription_tool`, {
+                user_id: userId,
+                user_name: "User",
+                organization: "Teams",
+                symbols: "",
+                event_types: ""
+            }, {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                timeout: 15000
+            });
+
+            return response.data;
+        } catch (error: any) {
+            console.error('Error removing subscription:', error);
+            return {
+                success: false,
+                error: error.response?.data?.message || error.message || 'Unknown error'
+            };
+        }
+    }
+
+    /**
+     * Get user subscription from CosmosDB
+     */
+    async getSubscription(userId: string): Promise<any> {
+        try {
+            const response = await axios.post(`${this.baseUrls.rag}/mcp/tools/get_subscription_tool`, {
+                user_id: userId
+            }, {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                timeout: 15000
+            });
+
+            return response.data;
+        } catch (error: any) {
+            console.error('Get subscription error:', error.message);
+            return {
+                subscription: null,
+                error: error.message || 'Failed to get subscription'
+            };
+        }
+    }
 }
