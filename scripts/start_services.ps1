@@ -90,9 +90,6 @@ Start-PythonService -ServiceName "MCP Server (RAG)" -Directory "mcp-rag" -Port 8
 # Start Web Search MCP Server
 Start-PythonService -ServiceName "Web Search MCP Server" -Directory "mcp-websearch" -Port 8001
 
-# Start Comments MCP Server
-Start-PythonService -ServiceName "Comments MCP Server" -Directory "mcp-comments" -Port 8002
-
 # Start Streamlit UI
 Write-Host "`n🖥️  Starting Streamlit UI..." -ForegroundColor Green
 Push-Location "clients\streamlit-ui"
@@ -118,13 +115,11 @@ Write-Host "`n✅ Corporate Actions POC started successfully!" -ForegroundColor 
 Write-Host "`nServices running on:" -ForegroundColor White
 Write-Host "  🤖 MCP Server (RAG):      http://localhost:8000" -ForegroundColor Cyan
 Write-Host "  🌐 Web Search MCP:        http://localhost:8001" -ForegroundColor Cyan
-Write-Host "  💬 Comments MCP:          http://localhost:8002" -ForegroundColor Cyan
 Write-Host "  🖥️  Streamlit UI:          http://localhost:8501" -ForegroundColor Cyan
 
 Write-Host "`nAPI Documentation:" -ForegroundColor White
 Write-Host "  📚 MCP Server API:        http://localhost:8000/docs" -ForegroundColor Gray
 Write-Host "  📚 Web Search API:        http://localhost:8001/docs" -ForegroundColor Gray
-Write-Host "  📚 Comments API:          http://localhost:8002/docs" -ForegroundColor Gray
 
 Write-Host "`n⚠️  Note: Make sure to update the .env file with your Azure credentials for full functionality." -ForegroundColor Yellow
 Write-Host "Press Ctrl+C to stop all services." -ForegroundColor Gray

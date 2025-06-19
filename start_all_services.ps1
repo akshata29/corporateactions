@@ -17,16 +17,12 @@ Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$RepoRoot\mcp
 
 Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$RepoRoot\mcp-websearch'; Write-Host '🔍 MCP WebSearch Server (HTTP) - Port 8001' -ForegroundColor Green; py main.py --port 8001"
 
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$RepoRoot\mcp-comments'; Write-Host '💬 MCP Comments Server (HTTP) - Port 8002' -ForegroundColor Green; py main.py --port 8002"
-
 # SSE MCP Servers (ports 8003-8005)
 Write-Host "⚡ Starting SSE MCP Servers..." -ForegroundColor Yellow
 
 Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$RepoRoot\mcp-rag'; Write-Host '🔥 MCP RAG Server (SSE) - Port 8003' -ForegroundColor Magenta; py main.py --sse --port 8003"
 
 Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$RepoRoot\mcp-websearch'; Write-Host '🔍 MCP WebSearch Server (SSE) - Port 8004' -ForegroundColor Magenta; py main.py --sse --port 8004"
-
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$RepoRoot\mcp-comments'; Write-Host '💬 MCP Comments Server (SSE) - Port 8005' -ForegroundColor Magenta; py main.py --sse --port 8005"
 
 # Give servers a moment to start
 Start-Sleep -Seconds 3
@@ -44,10 +40,8 @@ Write-Host ""
 Write-Host "🌐 Service URLs:" -ForegroundColor Cyan
 Write-Host "   • MCP RAG Server (HTTP):     http://localhost:8000" -ForegroundColor White
 Write-Host "   • MCP WebSearch (HTTP):      http://localhost:8001" -ForegroundColor White
-Write-Host "   • MCP Comments (HTTP):       http://localhost:8002" -ForegroundColor White
 Write-Host "   • MCP RAG Server (SSE):      http://localhost:8003" -ForegroundColor White
 Write-Host "   • MCP WebSearch (SSE):       http://localhost:8004" -ForegroundColor White
-Write-Host "   • MCP Comments (SSE):        http://localhost:8005" -ForegroundColor White
 Write-Host "   • Streamlit Dashboard:       http://localhost:8501" -ForegroundColor White
 Write-Host "   • Teams Bot:                 http://localhost:3978" -ForegroundColor White
 Write-Host ""

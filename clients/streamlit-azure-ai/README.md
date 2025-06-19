@@ -36,7 +36,6 @@ This Streamlit application provides a powerful corporate actions dashboard power
    - Ensure your MCP servers are running on the expected ports:
      - RAG Server: `http://localhost:8000/mcp`
      - Web Search Server: `http://localhost:8001/mcp`
-     - Comments Server: `http://localhost:8002/mcp`
 
 ### Installation
 
@@ -135,7 +134,6 @@ Tools are automatically registered with names like:
 - `mcp_rag_rag_query`
 - `mcp_rag_search_corporate_actions`
 - `mcp_websearch_web_search`
-- `mcp_comments_get_event_comments`
 
 ## 🛡️ Security Considerations
 

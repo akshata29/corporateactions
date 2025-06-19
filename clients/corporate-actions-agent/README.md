@@ -124,7 +124,6 @@ MICROSOFT_APP_TENANT_ID=your_tenant_id
 # MCP Server URLs (default local development)
 RAG_SERVER_URL=http://localhost:8001/sse
 SEARCH_SERVER_URL=http://localhost:8002/sse
-COMMENTS_SERVER_URL=http://localhost:8003/sse
 ```
 
 ### Available Scripts
@@ -137,12 +136,10 @@ COMMENTS_SERVER_URL=http://localhost:8003/sse
 # MCP Server Integration
 MCP_RAG_SERVER_URL=http://localhost:8001/sse
 MCP_SEARCH_SERVER_URL=http://localhost:8002/sse
-MCP_COMMENTS_SERVER_URL=http://localhost:8003/sse
 
 # Alternative HTTP endpoints
 MCP_RAG_HTTP_URL=http://localhost:8001
 MCP_SEARCH_HTTP_URL=http://localhost:8002
-MCP_COMMENTS_HTTP_URL=http://localhost:8003
 
 # Notification Settings
 ENABLE_PROACTIVE_NOTIFICATIONS=true
@@ -198,12 +195,6 @@ The bot integrates with three specialized MCP servers:
    - External data source aggregation
    - Real-time market data feeds
    - News and announcement monitoring
-
-3. **Comments Server** (`localhost:8003`)
-   - Collaborative comment system
-   - Structured discussion threads
-   - User interaction tracking
-   - Knowledge base building
 
 ### Integration Status
 

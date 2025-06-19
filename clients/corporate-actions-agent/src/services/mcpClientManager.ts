@@ -38,14 +38,12 @@ export class MCPClientManager {
     async ragQuery(
         query: string, 
         maxResults: number = 5, 
-        includeComments: boolean = true,
         chatHistory: Array<{role: string, content: string}> = []
     ): Promise<any> {        try {
             const response = await axios.get(`${this.baseUrls.rag}/rag-query`, {
                 params: {
                     query,
                     max_results: maxResults,
-                    include_comments: includeComments,
                     chat_history: JSON.stringify(chatHistory)
                 },
                 headers: {

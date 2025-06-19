@@ -1694,7 +1694,6 @@ async def http_save_subscription_tool(request: dict):
 async def http_rag_query(
     query: str,
     max_results: int = 5,
-    include_comments: bool = True,
     chat_history: str = "[]"
 ):
     """HTTP wrapper for RAG query functionality"""
@@ -2609,7 +2608,8 @@ async def vector_search(query_vector: List[float], max_results: int = 5) -> List
     try:
         if not search_client:
             logger.warning("AI Search client not available, using sample data")
-            return get_sample_events()[:max_results]
+            #return get_sample_events()[:max_results]
+            return []
         
         vector_query = VectorizedQuery(
             vector=query_vector,
@@ -2632,7 +2632,8 @@ async def vector_search(query_vector: List[float], max_results: int = 5) -> List
     except Exception as e:
         logger.error(f"Error in vector search: {e}")
         # Fallback to sample data
-        return get_sample_events()[:max_results]
+        #return get_sample_events()[:max_results]
+        return []
 
 async def generate_rag_response(query: str, search_results: List[Dict[str, Any]], chat_history: List[Dict[str, str]] = None) -> Dict[str, Any]:
     """Generate RAG response using Azure OpenAI with chat history and visualization support"""

@@ -31,7 +31,6 @@
 - **✅ Server Configuration**: Proper endpoint configuration
   - RAG Server: http://localhost:8000/mcp
   - Search Server: http://localhost:8001/mcp
-  - Comments Server: http://localhost:8002/mcp
 - **✅ Natural Language Integration**: Framework for MCP-powered responses
 - **✅ Error Handling**: Graceful fallbacks when MCP servers unavailable
 
@@ -49,7 +48,6 @@ The MCP servers (built with FastMCP) require proper MCP protocol session managem
 ```
 ⚠️ RAG server not available: http://localhost:8000/mcp
 ⚠️ SEARCH server not available: http://localhost:8001/mcp  
-⚠️ COMMENTS server not available: http://localhost:8002/mcp
 ```
 
 This is expected because FastMCP servers require:

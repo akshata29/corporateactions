@@ -165,8 +165,7 @@ if (-not $SkipMCPCheck) {
     
     $mcpServers = @(
         @{Url="http://localhost:8000/mcp"; Name="RAG Server"},
-        @{Url="http://localhost:8001/mcp"; Name="WebSearch Server"},
-        @{Url="http://localhost:8002/mcp"; Name="Comments Server"}
+        @{Url="http://localhost:8001/mcp"; Name="WebSearch Server"}
     )
     
     foreach ($server in $mcpServers) {

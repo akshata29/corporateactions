@@ -12,7 +12,6 @@ processes = []
 commands = [
     f'cd "{rootLocation}\\mcp-rag" && "{python_executable}" main.py --port 8000',
     f'cd "{rootLocation}\\mcp-websearch" && "{python_executable}" main.py --port 8001',
-    f'cd "{rootLocation}\\mcp-comments" && "{python_executable}" main.py --port 8002',
     f'cd "{rootLocation}\\clients\\streamlit-ui" && "{python_executable}" -m streamlit run app_mcp.py',
 ]
 

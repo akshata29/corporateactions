@@ -2,15 +2,6 @@
 
 A collaborative data sharing platform for corporate actions that enables real-time access and transparency to market participants throughout the custody chain, implemented using the **Model Context Protocol (MCP)** with **Enhanced RAG capabilities and Dynamic Visualizations**.
 
-## ✅ DEVELOPMENT STATUS: **ENHANCED & COMPLETE**
-
-**All servers have been successfully converted to pure MCP implementation with advanced features:**
-- ✅ **Enhanced RAG Assistant** with chat history and context awareness
-- ✅ **Dynamic Visualization Generation** using Python code execution
-- ✅ **Advanced Dashboard** with interactive charts and color-coded insights
-- ✅ **Cross-platform compatibility** (Windows DNS fixes applied)
-- ✅ **Data structure normalization** for seamless Azure AI Search integration
-
 ## 🏗️ Architecture Overview
 
 ```mermaid
@@ -34,7 +25,6 @@ graph TB
     subgraph "MCP Servers (FastMCP + SSE)"
         RAG[Main RAG Server<br/>HTTP Port 8000 - SSE Port 8003<br/>6 Tools + Chat History]
         SEARCH[Web Search Server<br/>HTTP Port 8001 - SSE Port 8004<br/>4 Tools + News]
-        COMMENTS[Comments Server<br/>HTTP Port 8002 - SSE Port 8005<br/>7 Tools + Analytics]
     end
 
     %% Azure Services
@@ -120,46 +110,6 @@ graph TB
 #### Cross-Platform Compatibility
 - **Windows DNS Fixes**: Resolved `aiodns` selector event loop issues
 - **Azure Service Integration**: Robust connection handling with fallback mechanisms
-- **Data Structure Flexibility**: Handles both `issuer_name` and `company_name` field variations
-
-## 🔄 Recent Updates & Fixes (June 2025)
-
-### Azure AI Streamlit Application Enhancements ⭐
-
-#### Field Normalization & Data Structure Fixes
-- **✅ Fixed Company Name Display Issue**: Resolved "Unknown Company" problem in dashboard visualizations
-  - Enhanced MCP data parsing logic to properly handle different JSON response formats
-  - Improved `normalize_event_data()` function with better field mapping (`issuer_name` ↔ `company_name`)
-  - Added comprehensive fallback mechanisms for various data structures
-  - Enhanced support for nested security objects and symbol extraction
-
-#### Date Parsing & Analytics Improvements
-- **✅ Fixed Advanced Analytics Date Parsing Error**: Resolved `ValueError: time data "N/A" doesn't match format` 
-  - Added `errors='coerce'` parameter to `pd.to_datetime()` calls to handle invalid date strings
-  - Enhanced timeline visualization with NaT (Not a Time) value filtering
-  - Added graceful error handling for missing or invalid date fields
-  - Improved data validation in analytics dashboard
-
-#### Enhanced MCP Integration
-- **✅ Improved MCP Response Parsing**: Enhanced JSON parsing logic for better data extraction
-  - Added support for complete JSON responses with `events` arrays
-  - Implemented fallback regex parsing for malformed responses
-  - Enhanced debug output to show actual data structure for troubleshooting
-  - Better handling of different MCP server response formats
-
-#### User Experience Improvements
-- **✅ Enhanced Dashboard Visualizations**: Better data presentation and error handling
-  - Added validation warnings for timeline visualizations with no valid dates
-  - Improved status color coding and visual indicators
-  - Enhanced data structure debugging tools
-  - Better fallback mechanisms when live data is unavailable
-
-#### Code Quality & Robustness
-- **✅ Enhanced Error Handling**: More robust error handling and user feedback
-  - Added comprehensive try-catch blocks for data parsing operations
-  - Improved error messages and user guidance
-  - Enhanced fallback data generation for demo purposes
-  - Better logging and debugging capabilities
 
 ### Impact & Benefits
 - **🎯 Improved User Experience**: Dashboard now correctly displays company names and handles date fields gracefully
@@ -200,18 +150,6 @@ This POC leverages Azure Services and the Model Context Protocol to build an Age
      - `news_search` - *Financial news with sentiment analysis*
      - `financial_data_search` - *Company symbol lookup with market data*
      - `get_search_health` - *API status and performance monitoring*
-
-3. **Comments MCP Server** - **7 Collaboration Tools** 💬
-   - **Real-time Collaboration** with WebSocket-like features
-   - **Advanced Analytics** with trend analysis and insights
-   - **Comment Intelligence** with categorization and resolution tracking
-   - **Enhanced Tools**:
-     - `get_event_comments` - *Advanced filtering and pagination*
-     - `add_comment` - *Multi-type support (questions, concerns, analysis)*
-     - `update_comment` - *Resolution tracking and status management*
-     - `search_comments` - *Full-text search across all events*
-     - `get_comment_analytics` - *Trend analysis and engagement metrics*
-     - `subscribe_to_event` - *Real-time notification system*
 
 ### Client Applications 🖥️
 
@@ -286,10 +224,6 @@ This POC leverages Azure Services and the Model Context Protocol to build an Age
    pip install -r requirements.txt
    cd ..
    
-   # Comments server
-   cd mcp-comments
-   pip install -r requirements.txt
-   cd ..
    ```
 
 4. **Configure environment variables**
@@ -342,9 +276,6 @@ python main.py --port 8000
 cd mcp-websearch  
 python main.py --port 8001
 
-# Comments server (MCP HTTP)
-cd mcp-comments
-python main.py --port 8002
 ```
 
 #### SSE Mode (Ports 8003-8005)
@@ -357,9 +288,6 @@ python main.py --sse --port 8003
 cd mcp-websearch  
 python main.py --sse --port 8004
 
-# Comments server (SSE)
-cd mcp-comments
-python main.py --sse --port 8005
 ```
 
 ## 🛠️ Enhanced MCP Tools & Capabilities
@@ -404,29 +332,6 @@ python main.py --sse --port 8005
 
 - **`get_search_health`**: *API monitoring and performance tracking*
   - Check search service health with comprehensive diagnostics
-
-### Comments Server Tools (Enhanced) 💬  
-- **`get_event_comments`**: *Advanced filtering and analytics*
-  - Retrieve comments with intelligent filtering and pagination
-  - **NEW**: Advanced categorization and sentiment tracking
-
-- **`add_comment`**: *Multi-type collaboration support*
-  - Add various comment types (general, question, analysis, clarification)
-  - **NEW**: Enhanced threading and real-time notifications
-
-- **`update_comment`**: *Resolution workflow management*
-  - Update comments with resolution tracking and status management
-
-- **`search_comments`**: *Full-text intelligent search*
-  - Search across all event comments with advanced relevance scoring
-
-- **`get_comment_analytics`** ⭐: *Trend analysis and engagement insights*
-  - **NEW**: Advanced analytics with trend detection
-  - **NEW**: Engagement metrics and sentiment analysis
-  - **NEW**: Organization activity tracking and insights
-
-- **`subscribe_to_event`**: *Real-time notification system*
-  - Subscribe to event updates with intelligent filtering
 
 ## 🎨 Dynamic Visualization Capabilities
 
@@ -476,7 +381,6 @@ async with stdio_client(["python", "mcp-rag/main.py"]) as (read, write):
         result = await session.call_tool("rag_query", {
             "query": "Show me a pie chart of dividend payment status",
             "max_results": 10,
-            "include_comments": True,
             "chat_history": json.dumps([
                 {"role": "user", "content": "What are recent dividends?"},
                 {"role": "assistant", "content": "I found several recent dividend announcements..."}
@@ -537,7 +441,6 @@ chat_history = [
 response = client.rag_query(
     query="Create a visualization of dividend amounts by company",
     max_results=10,
-    include_comments=True,
     chat_history=chat_history
 )
 
@@ -568,9 +471,6 @@ corporateactions/
 ├── mcp-websearch/                # Enhanced web search MCP server 🌐
 │   ├── main.py                   # FastMCP with intelligent search tools + SSE
 │   └── requirements.txt          # MCP + search + analytics dependencies  
-├── mcp-comments/                 # Enhanced collaboration MCP server 💬
-│   ├── main.py                   # FastMCP with advanced collaboration tools + SSE
-│   └── requirements.txt          # MCP + storage + analytics dependencies
 ├── data-models/                  # Shared data schemas & normalization 📊
 │   ├── corporate_action_schemas.py # Enhanced schemas with visualization support
 │   └── sample_data.py           # Rich sample data for testing
@@ -647,13 +547,6 @@ corporateactions/
 - ✅ **No Azure Bot Service Dependency**: Direct Teams integration
 - ✅ **Real-time Data Streaming**: Enhanced responsiveness
 
-#### `/mcp-comments/` - Advanced Collaboration + SSE
-- ✅ **Enhanced Analytics**: Trend analysis and engagement metrics
-- ✅ **Real-time Updates**: Live collaboration features
-- ✅ **Intelligent Categorization**: Smart comment classification
-- ✅ **Resolution Tracking**: Workflow management for Q&A
-- ✅ **SSE Endpoints**: Real-time comment streaming
-
 #### `/data-models/` - Enhanced Data Handling
 - ✅ **Schema Flexibility**: Support for multiple data structure variants
 - ✅ **Visualization Schema**: Chart configuration and suggestion models
@@ -675,148 +568,6 @@ This enhanced test suite validates:
 - ✅ **Tool Availability**: All 17 enhanced tools across 3 servers
 - ✅ **Windows Compatibility**: DNS resolution and event loop configuration
 - ✅ **Data Normalization**: Field mapping and structure compatibility
-
-### Test Enhanced RAG with Visualization
-```python
-# Test RAG query with chat history and visualization detection
-import asyncio
-import json
-from mcp_server.main import app
-
-async def test_enhanced_rag():
-    # Test visualization detection
-    response = await app.call_tool('rag_query', {
-        "query": "Show me a pie chart of dividend status distribution",
-        "max_results": 5,
-        "include_comments": True,
-        "chat_history": json.dumps([
-            {"role": "user", "content": "What are recent corporate actions?"},
-            {"role": "assistant", "content": "I found several recent events..."}
-        ])
-    })
-    
-    result = json.loads(response)
-    print(f"Visualization Required: {result['requires_visualization']}")
-    print(f"Suggested Charts: {result.get('visualization_suggestions', {})}")
-
-asyncio.run(test_enhanced_rag())
-```
-
-### Test Dynamic Visualization Generation
-```python
-# Test Streamlit dynamic visualization capabilities
-from clients.streamlit_ui.app_mcp import generate_dynamic_visualization
-
-# Mock corporate actions data
-sample_data = [
-    {"company_name": "Apple Inc.", "status": "confirmed", "event_type": "dividend"},
-    {"company_name": "Microsoft", "status": "announced", "event_type": "stock_split"},
-    {"company_name": "Tesla", "status": "pending", "event_type": "dividend"}
-]
-
-# Test chart generation
-fig = generate_dynamic_visualization(
-    sources=sample_data,
-    query="show me a status distribution chart",
-    viz_suggestions={"recommended_charts": ["status_distribution_pie"]}
-)
-
-print(f"Chart Generated: {fig is not None}")
-```
-
-### Test Enhanced Comment Analytics
-```python
-# Test advanced comment analytics
-response = await app.call_tool('get_comment_analytics', {
-    "event_id": "AAPL_DIV_2024_Q1", 
-    "days_back": 30
-})
-
-analytics = json.loads(response)
-print(f"Resolution Rate: {analytics['summary']['resolution_rate']}%")
-print(f"Engagement Trends: {analytics['recent_activity']}")
-```
-
-### Test Azure AI Streamlit Application Fixes
-```python
-# Test field normalization fixes
-from clients.streamlit_azure_ai.app import normalize_event_data
-
-# Test data with different field structures
-test_events = [
-    {"issuer_name": "Apple Inc.", "symbol": "AAPL", "event_type": "dividend"},
-    {"company_name": "Microsoft Corp.", "symbol": "MSFT", "event_type": "split"},
-    {"security": {"symbol": "GOOGL"}, "issuer_name": "Alphabet Inc."}
-]
-
-normalized = normalize_event_data(test_events)
-for event in normalized:
-    assert "company_name" in event, "Field normalization failed"
-    print(f"✅ Company: {event['company_name']}, Symbol: {event.get('symbol', 'N/A')}")
-
-# Test date parsing fixes
-import pandas as pd
-
-# Test with problematic date values
-test_dates = ["2025-06-15", "N/A", None, "Invalid Date", "2025-12-25T10:30:00Z"]
-df = pd.DataFrame({"announcement_date": test_dates})
-
-# This should not raise ValueError anymore
-df['announcement_date'] = pd.to_datetime(df['announcement_date'], errors='coerce')
-valid_dates = df.dropna(subset=['announcement_date'])
-
-print(f"✅ Successfully parsed {len(valid_dates)} valid dates from {len(test_dates)} inputs")
-print(f"✅ No ValueError raised for invalid date strings")
-```
-
-### Test MCP Response Parsing Improvements
-```python
-# Test enhanced MCP response parsing
-import json
-import re
-
-def test_mcp_parsing(mcp_response):
-    """Test the improved MCP response parsing logic"""
-    parsed_events = []
-    
-    # Test complete JSON parsing
-    if isinstance(mcp_response, str):
-        try:
-            mcp_json = json.loads(mcp_response)
-            if isinstance(mcp_json, dict) and 'events' in mcp_json:
-                parsed_events = mcp_json['events']
-                print("✅ Successfully parsed complete JSON with events array")
-            elif isinstance(mcp_json, list):
-                parsed_events = mcp_json
-                print("✅ Successfully parsed JSON array")
-        except json.JSONDecodeError:
-            # Test fallback regex parsing
-            json_pattern = r'\{(?:[^{}]|{[^{}]*})*\}'
-            json_matches = re.findall(json_pattern, mcp_response)
-            
-            for match in json_matches:
-                try:
-                    event_data = json.loads(match)
-                    if isinstance(event_data, dict):
-                        parsed_events.append(event_data)
-                except:
-                    continue
-            print(f"✅ Successfully parsed {len(parsed_events)} events via regex fallback")
-    
-    return parsed_events
-
-# Test with various response formats
-test_responses = [
-    '{"events": [{"company_name": "Apple Inc.", "event_type": "dividend"}]}',
-    '[{"company_name": "Microsoft", "event_type": "split"}]',
-    'Some text {"company_name": "Tesla", "event_type": "merger"} more text',
-    'Malformed { json response'
-]
-
-for response in test_responses:
-    events = test_mcp_parsing(response)
-    print(f"✅ Parsed {len(events)} events from response")
-```
 
 ## 🚀 Enhanced Deployment Guide
 
@@ -873,9 +624,6 @@ pip install -r clients/streamlit-azure-ai/requirements.txt
 copy .env.example .env
 # Edit .env with your Azure service credentials
 
-# Test enhanced capabilities
-python test_mcp_servers.py
-
 # Start everything with automation
 .\start_all_services.ps1
 
@@ -890,10 +638,8 @@ cd ../streamlit-azure-ai ; .\start-azure-ai-app.ps1
 - **🤖 Azure AI Dashboard**: http://localhost:8502  
 - **📡 MCP RAG Server**: http://localhost:8000/mcp
 - **🔍 MCP Web Search**: http://localhost:8001/mcp
-- **💬 MCP Comments**: http://localhost:8002/mcp
 - **🌊 SSE RAG Server**: http://localhost:8003/health
 - **🌊 SSE Web Search**: http://localhost:8004/health
-- **🌊 SSE Comments**: http://localhost:8005/health
 
 ### Azure Deployment (Production Ready)
 ```powershell
@@ -908,22 +654,6 @@ python scripts/data_ingestion.py
 # Enable visualization dependencies in Azure App Service
 ```
 
-### Deployment Validation Checklist ✅
-- [ ] All 3 MCP servers running in both HTTP and SSE modes
-- [ ] Azure OpenAI GPT-4 deployment active
-- [ ] Azure AI Search index populated with corporate actions
-- [ ] Azure Cosmos DB containers created (events, comments)
-- [ ] Enhanced Streamlit UI accessible with dynamic visualizations (port 8501)
-- [ ] Azure AI Streamlit UI accessible with agent integration (port 8502)
-- [ ] Teams bot responding with MCP SSE integration (port 3978)
-- [ ] Chat history and context awareness working
-- [ ] Dynamic chart generation functional
-- [ ] Color-coded dashboards displaying correctly
-- [ ] Field normalization fixes working (no "Unknown Company" issues)
-- [ ] Date parsing improvements functional (no analytics errors)
-- [ ] Windows PowerShell automation scripts working
-- [ ] MCP tool discovery and registration working in Azure AI Agent
-
 ## 📝 Enhanced API Documentation & Examples
 
 ### Interactive API Documentation & Health Endpoints
@@ -931,15 +661,12 @@ python scripts/data_ingestion.py
 #### MCP HTTP Servers (Ports 8000-8002)
 - **Main RAG Server**: http://localhost:8000/mcp *(MCP protocol endpoint)*
 - **Web Search Server**: http://localhost:8001/mcp *(MCP protocol endpoint)*  
-- **Comments Server**: http://localhost:8002/mcp *(MCP protocol endpoint)*
 
 #### SSE Servers (Ports 8003-8005) - For Teams Bot Integration
 - **RAG Server Health**: http://localhost:8003/health
 - **RAG Query**: `GET http://localhost:8003/rag-query?query=<query>`
 - **Search Health**: http://localhost:8004/health  
 - **Web Search**: `GET http://localhost:8004/web-search?query=<query>`
-- **Comments Health**: http://localhost:8005/health
-- **Event Comments**: `GET http://localhost:8005/event-comments/<event_id>`
 
 #### Azure AI Agent Service Integration
 - **Tool Discovery**: Automatic MCP tool registration
@@ -966,57 +693,3 @@ python scripts/data_ingestion.py
     }
 }
 ```
-
-#### Advanced Comment Analytics
-```python
-# Enhanced Analytics Response
-{
-    "summary": {
-        "total_comments": 45,
-        "resolution_rate": 78.5,
-        "questions": 12,
-        "concerns": 8,
-        "updates": 15
-    },
-    "organizations": {
-        "top_contributors": [
-            {"organization": "Goldman Sachs", "comment_count": 8},
-            {"organization": "JPMorgan", "comment_count": 6}
-        ]
-    },
-    "recent_activity": {
-        "comments_last_24h": 5,
-        "trending_topics": ["shareholder approval", "timeline updates"]
-    }
-}
-```
-
-## 🔄 Enhanced Migration & Evolution Notes
-
-### Platform Evolution Timeline 
-- ✅ **Phase 1** (Completed): FastAPI REST endpoints → MCP implementation
-- ✅ **Phase 2** (Completed): Basic MCP tools → Enhanced capabilities  
-- ✅ **Phase 3** (Completed): Static responses → Dynamic visualizations
-- ✅ **Phase 4** (Completed): Simple queries → Context-aware conversations
-- ✅ **Phase 5** (Completed): Dual transport architecture (MCP HTTP + SSE)
-- ✅ **Phase 6** (Current): Azure AI Agent Service integration with MCP tool discovery
-
-### Recent Major Enhancements 🎯
-- ✅ **Dual Transport Architecture**: MCP HTTP + SSE modes for different client needs
-- ✅ **Azure AI Agent Service Integration**: Intelligent MCP tool orchestration
-- ✅ **Teams Bot SSE Integration**: Low-latency Server-Sent Events transport
-- ✅ **PowerShell Automation**: Windows-native startup and monitoring scripts
-- ✅ **Field Normalization Fixes**: Resolved "Unknown Company" display issues
-- ✅ **Date Parsing Improvements**: Fixed ValueError crashes in analytics
-- ✅ **Enhanced MCP Response Parsing**: Better JSON handling and fallback mechanisms
-- ✅ **TypeScript Teams Bot**: Modern, type-safe Teams integration
-
-### Technical Benefits Achieved 🚀
-- **🌊 Transport Flexibility**: Choose between MCP HTTP or SSE based on client needs
-- **🤖 AI Orchestration**: Azure AI Agent Service manages complex tool interactions
-- **📱 Native Teams Integration**: Direct Teams bot without Azure Bot Service dependency
-- **🪟 Windows-First Development**: PowerShell scripts and Windows compatibility
-- **🔧 Enhanced Reliability**: Robust error handling and graceful fallbacks
-- **📊 Data Quality**: Field normalization and date parsing improvements
-- **⚡ Performance**: SSE transport for real-time responsiveness
-- **🎯 Developer Experience**: TypeScript, automated testing, comprehensive documentation

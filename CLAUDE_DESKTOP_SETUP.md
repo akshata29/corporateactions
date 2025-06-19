@@ -39,8 +39,6 @@ pip install -r requirements.txt
 cd d:\repos\corporateactions\mcp-websearch  
 pip install -r requirements.txt
 
-cd d:\repos\corporateactions\mcp-comments
-pip install -r requirements.txt
 ```
 
 #### Set Environment Variables
@@ -64,14 +62,6 @@ BING_SEARCH_V7_SUBSCRIPTION_KEY=your_bing_key
 BING_SEARCH_V7_ENDPOINT=https://api.bing.microsoft.com/
 ```
 
-**For mcp-comments (.env):**
-```env
-COSMOS_ENDPOINT=your_cosmos_endpoint
-COSMOS_KEY=your_cosmos_key
-COSMOS_DATABASE_NAME=corporate-actions
-COSMOS_CONTAINER_NAME=comments
-```
-
 ## 🚀 Testing Your Setup
 
 ### Step 1: Test Individual MCP Servers
@@ -87,9 +77,6 @@ python main.py
 cd d:\repos\corporateactions\mcp-websearch
 python main.py
 
-# Test Comments Server
-cd d:\repos\corporateactions\mcp-comments
-python main.py
 ```
 
 ### Step 2: Restart Claude Desktop
@@ -121,15 +108,6 @@ In Claude Desktop, you should see:
 2. `search_financial_news` - Financial news search
 3. `get_company_info` - Company information lookup
 4. `search_regulatory_filings` - SEC filings search
-
-### Comments Server (Port 8002)
-1. `submit_question` - Submit participant questions
-2. `submit_concern` - Submit participant concerns  
-3. `get_questions` - Retrieve questions
-4. `get_concerns` - Retrieve concerns
-5. `get_analytics` - Get engagement analytics
-6. `get_question_details` - Get detailed question info
-7. `get_concern_details` - Get detailed concern info
 
 ## 🔍 Troubleshooting
 
@@ -194,14 +172,6 @@ What questions have been submitted about corporate actions?
         "PYTHONUNBUFFERED": "1"
       }
     },
-    "corporate-actions-comments": {
-      "command": "python",
-      "args": ["d:\\repos\\corporateactions\\mcp-comments\\main.py"],
-      "env": {
-        "PYTHONPATH": "d:\\repos\\corporateactions\\mcp-comments",
-        "PYTHONUNBUFFERED": "1"
-      }
-    }
   }
 }
 ```

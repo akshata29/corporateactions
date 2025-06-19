@@ -80,12 +80,6 @@ def main():
             "port": base_ports[1],
             "sse": sse_mode
         },
-        {
-            "name": f"Comments Server ({mode_text})",
-            "path": "mcp-comments/main.py", 
-            "port": base_ports[2],
-            "sse": sse_mode
-        }
     ]
     
     # Start each server
@@ -117,14 +111,9 @@ def main():
             print("    - Health: http://localhost:8004/health") 
             print("    - Web Search: http://localhost:8004/web-search?query=<query>")
             print("    - News Search: http://localhost:8004/news-search?query=<query>")
-            print("  • Comments Server (SSE): http://localhost:8005")
-            print("    - Health: http://localhost:8005/health")
-            print("    - Event Comments: http://localhost:8005/event-comments/{event_id}")
-            print("    - Add Comment: http://localhost:8005/add-comment")
         else:
             print("  • Main RAG Server (MCP): http://localhost:8000/mcp")
             print("  • Web Search Server (MCP): http://localhost:8001/mcp") 
-            print("  • Comments Server (MCP): http://localhost:8002/mcp")
             
         print("\n⌨️ Press Ctrl+C to stop all servers")
         

@@ -81,10 +81,9 @@ Your capabilities include:
 You have access to the following tools via MCP integration:
 - rag_query: Enhanced search with chat history and visualization detection
 - search_corporate_actions: Advanced filtering and data normalization
-- get_event_details: Comprehensive event information with comments
+- get_event_details: Comprehensive event information
 - web_search: Financial news and market data
 - news_search: Corporate actions news with sentiment analysis
-- get_event_comments: Collaborative discussion threads
 
 Always provide:
 1. Clear, actionable insights
@@ -98,8 +97,7 @@ Be professional, accurate, and helpful in all interactions."""
 # MCP Server URLs for tool discovery
 MCP_SERVERS = {
     "rag": "http://localhost:8000/mcp",
-    "websearch": "http://localhost:8001/mcp", 
-    "comments": "http://localhost:8002/mcp"
+    "websearch": "http://localhost:8001/mcp"
 }
 
 class AzureAIAgentManager:
@@ -385,7 +383,7 @@ Please analyze this data and provide insights based on the user's query.
                     continue
                       # Prepare arguments based on tool type
                 if tool_name == "rag_query":
-                    args = {"query": message, "max_results": 5, "include_comments": True}
+                    args = {"query": message, "max_results": 5, "chat_history": ""}
                 elif tool_name == "search_corporate_actions":
                     args = {"search_text": message, "limit": 10}
                 elif tool_name in ["web_search", "news_search"]:
@@ -657,6 +655,712 @@ def normalize_event_data(events: List[Dict]) -> List[Dict]:
     
     return normalized
 
+def extract_events_from_response(response_text: str) -> List[Dict]:
+    """Extract event data from AI Agent response - simplified version"""
+    # This would parse the AI response to extract structured event data
+    # For now, return sample events based on response content
+    events = []
+    
+    # Look for company mentions in response
+    import re
+    companies = re.findall(r'([A-Z]{2,5})', response_text)
+    
+    if companies:
+        for i, symbol in enumerate(companies[:5]):  # Limit to 5 events
+            events.append({
+                "event_id": f"EVT_{symbol}_{i}",
+                "symbol": symbol,
+                "company_name": f"{symbol} Inc.",
+                "event_type": "dividend",
+                "description": f"Corporate action for {symbol}",
+                "status": "announced",
+                "event_date": (datetime.now() + timedelta(days=i+1)).date(),
+                "inquiries": []
+            })
+    
+    return events
+
+    """Display dashboard metrics and events list"""
+    events = st.session_state.dashboard_events
+    
+    if events:
+        # Display metrics
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("📊 Total Upcoming", len(events))
+        with col2:
+            dividend_count = len([e for e in events if 'dividend' in e.get('event_type', '').lower()])
+            st.metric("💰 Dividends", dividend_count)
+        with col3:
+            total_inquiries = sum(len(event.get('inquiries', [])) for event in events)
+            st.metric("❓ Total Inquiries", total_inquiries)
+        with col4:
+            urgent_count = sum(len([i for i in event.get('inquiries', []) if i.get('priority') == 'HIGH']) for event in events)
+            st.metric("🚨 Urgent Issues", urgent_count)
+        
+        # Display events
+        for i, event in enumerate(events):
+            with st.expander(
+                f"🎯 **{event.get('symbol', 'Unknown')}** - {event.get('event_type', 'Unknown').replace('_', ' ').title()} "
+                f"({event.get('event_date', 'Unknown')})", 
+                expanded=i < 3
+            ):
+                col1, col2 = st.columns([2, 1])
+                
+                with col1:
+                    st.write(f"**Company:** {event.get('company_name', 'Unknown')}")
+                    st.write(f"**Type:** {event.get('event_type', 'Unknown').replace('_', ' ').title()}")
+                    st.write(f"**Status:** {event.get('status', 'Unknown').title()}")
+                    st.write(f"**Description:** {event.get('description', 'No description')}")
+                
+                with col2:
+                    # Inquiry management buttons
+                    st.markdown("**🔧 Inquiry Actions**")
+                    
+                    btn_col1, btn_col2, btn_col3 = st.columns(3)
+                    
+                    with btn_col1:
+                        if st.button("🆕", key=f"create_{event.get('event_id', i)}", 
+                                help="Create new inquiry", use_container_width=True):
+                            st.session_state.selected_event_for_inquiry = event
+                            st.session_state.inquiry_modal_type = 'create'
+                            st.rerun()
+                    
+                    with btn_col2:
+                        if st.button("👁️", key=f"view_{event.get('event_id', i)}", 
+                                help="View all inquiries", use_container_width=True):
+                            st.session_state.selected_event_for_inquiry = event
+                            st.session_state.inquiry_modal_type = 'view'
+                            st.rerun()
+                    
+                    with btn_col3:
+                        if st.button("✏️", key=f"edit_{event.get('event_id', i)}", 
+                                help="Edit your inquiries", use_container_width=True):
+                            st.session_state.selected_event_for_inquiry = event
+                            st.session_state.inquiry_modal_type = 'edit'
+                            st.rerun()
+                    
+                    # Show inquiry count
+                    inquiry_count = len(event.get('inquiries', []))
+                    if inquiry_count > 0:
+                        st.markdown(f"<small>📝 {inquiry_count} inquiries</small>", unsafe_allow_html=True)
+                    else:
+                        st.markdown("<small>📭 No inquiries</small>", unsafe_allow_html=True)
+    else:
+        st.info("📭 No upcoming corporate actions found")
+        if not st.session_state.user_subscriptions:
+            st.warning("💡 Subscribe to symbols above to see relevant events!")
+
+def show_sample_dashboard_overview():
+    """Show sample dashboard when agent not available"""
+    st.info("📊 Sample Corporate Actions Overview")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("📋 Sample Events", 5)
+    with col2:
+        st.metric("💰 Dividends", 2)
+    with col3:
+        st.metric("📈 Stock Splits", 1)
+    with col4:
+        st.metric("🏢 Mergers", 1)
+    
+    st.info("Initialize the Azure AI Agent to access live data and full functionality.")
+
+def get_sample_upcoming_events(user_subscriptions=None):
+    """Get sample upcoming events, filtered by user subscriptions if provided"""
+    all_events = [
+        {
+            "event_id": "AAPL_DIV_2025_Q2",
+            "company_name": "Apple Inc.",
+            "symbol": "AAPL",
+            "event_type": "dividend",
+            "description": "Quarterly cash dividend",
+            "status": "confirmed",
+            "announcement_date": "2025-06-01",
+            "ex_date": "2025-06-25",
+            "amount": "$0.25"
+        },
+        {
+            "event_id": "MSFT_SPLIT_2025",
+            "company_name": "Microsoft Corporation",
+            "symbol": "MSFT",
+            "event_type": "stock_split",
+            "description": "2-for-1 stock split",
+            "status": "announced",
+            "announcement_date": "2025-05-15",
+            "ex_date": "2025-07-01",
+            "ratio": "2:1"
+        },
+        {
+            "event_id": "TSLA_DIV_2025_SPECIAL",
+            "company_name": "Tesla Inc.",
+            "symbol": "TSLA",
+            "event_type": "special_dividend",
+            "description": "Special cash dividend distribution",
+            "status": "confirmed",
+            "announcement_date": "2025-05-20",
+            "ex_date": "2025-06-30",
+            "amount": "$5.00"
+        },
+        {
+            "event_id": "GOOGL_MERGER_2025",
+            "company_name": "Alphabet Inc.",
+            "symbol": "GOOGL",
+            "event_type": "merger",
+            "description": "Strategic acquisition announcement",
+            "status": "announced",
+            "announcement_date": "2025-05-25",
+            "effective_date": "2025-08-15"
+        },
+        {
+            "event_id": "NVDA_SPINOFF_2025",
+            "company_name": "NVIDIA Corporation",
+            "symbol": "NVDA",
+            "event_type": "spinoff",
+            "description": "AI division spinoff",
+            "status": "pending",
+            "announcement_date": "2025-06-10",
+            "ex_date": "2025-09-01"
+        }
+    ]
+    
+    # If user subscriptions are provided, filter events by subscribed symbols
+    if user_subscriptions and len(user_subscriptions) > 0:
+        subscribed_symbols = []
+        for sub in user_subscriptions:
+            if isinstance(sub, dict) and 'symbol' in sub:
+                subscribed_symbols.append(sub['symbol'])
+            elif isinstance(sub, str):
+                subscribed_symbols.append(sub)
+        
+        if subscribed_symbols:
+            filtered_events = [event for event in all_events if event['symbol'] in subscribed_symbols]
+            return filtered_events if filtered_events else all_events  # Return all if no matches
+    
+    return all_events
+
+# Inquiry Modal Functions (simplified versions that use AI Agent)
+def get_user_inquiry_status(event_data: Dict[str, Any], user_id: str) -> Dict[str, Any]:
+    """Get user's inquiry status for a specific event using embedded inquiry data"""
+    try:
+        # Get inquiries from the event data directly (already embedded)
+        all_inquiries = event_data.get('inquiries', [])
+        
+        # Debug: Show what we found
+        print(f"DEBUG - Event {event_data.get('event_id', 'unknown')} has {len(all_inquiries)} total inquiries")
+        print(f"DEBUG - Looking for user_id: '{user_id}'")
+        
+        # Show all user_ids in the inquiries for debugging
+        if all_inquiries:
+            inquiry_user_ids = [inq.get("user_id", "NO_USER_ID") for inq in all_inquiries]
+            print(f"DEBUG - Inquiry user_ids found: {inquiry_user_ids}")
+        
+        # Filter for user's inquiries - try multiple potential user ID formats
+        user_inquiries = []
+        for inq in all_inquiries:
+            inq_user_id = inq.get("user_id", "")
+            # Try exact match first
+            if inq_user_id == user_id:
+                user_inquiries.append(inq)
+            # Try with demo_ prefix
+            elif inq_user_id == f"demo_{user_id}":
+                user_inquiries.append(inq)
+            # Try removing demo_ prefix if our user_id has it
+            elif user_id.startswith("demo_") and inq_user_id == user_id.replace("demo_", ""):
+                user_inquiries.append(inq)
+            # Try the base user part (e.g., user_001 matches demo_user_001)
+            elif inq_user_id.endswith(user_id.split("_")[-1]) or user_id.endswith(inq_user_id.split("_")[-1]):
+                user_inquiries.append(inq)
+        
+        # Debug: Show user inquiries
+        print(f"DEBUG - User {user_id} has {len(user_inquiries)} inquiries for this event")
+        if user_inquiries:
+            for inq in user_inquiries:
+                print(f"DEBUG - Found matching inquiry: {inq.get('subject', 'No subject')} (status: {inq.get('status', 'Unknown')})")
+        
+        # Count editable inquiries (OPEN or ACKNOWLEDGED status)
+        editable_inquiries = [inq for inq in user_inquiries 
+                            if inq.get("status", "").upper() in ["OPEN", "ACKNOWLEDGED"]]
+        
+        result = {
+            "has_inquiries": len(user_inquiries) > 0,
+            "total_count": len(user_inquiries),
+            "editable_count": len(editable_inquiries),
+            "all_inquiries": user_inquiries,
+            "editable_inquiries": editable_inquiries
+        }
+        
+        # Debug: Show final result
+        print(f"DEBUG - Final inquiry status for event {event_data.get('event_id', 'unknown')}: {result}")
+        
+        return result
+        
+    except Exception as e:
+        print(f"DEBUG - Error getting inquiry status: {str(e)}")
+        # Return default status if anything fails
+        return {
+            "has_inquiries": False,
+            "total_count": 0,
+            "editable_count": 0,
+            "all_inquiries": [],
+            "editable_inquiries": []
+        }
+
+def show_dashboard_metrics_and_events():
+    """Display dashboard metrics and events list"""
+    if not st.session_state.dashboard_events:
+        st.info("📊 No events to display")
+        return
+    
+    # Debug: Show current user_id
+    st.write(f"**Debug - Current User ID:** `{st.session_state.user_id}`")
+    
+    # Dashboard metrics
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric("📅 Total Events", len(st.session_state.dashboard_events))
+    with col2:
+        dividend_count = len([e for e in st.session_state.dashboard_events 
+                            if e.get('event_type') == 'dividend'])
+        st.metric("💰 Dividends", dividend_count)
+    with col3:
+        split_count = len([e for e in st.session_state.dashboard_events 
+                         if e.get('event_type') == 'stock_split'])
+        st.metric("📈 Stock Splits", split_count)
+    with col4:
+        # Count total inquiries across all events from embedded data
+        total_inquiries = 0
+        for event in st.session_state.dashboard_events:
+            event_inquiries = event.get('inquiries', [])
+            total_inquiries += len(event_inquiries)
+        st.metric("❓ Total Inquiries", total_inquiries)
+
+    # Events list
+    st.markdown("---")
+    st.subheader("📋 Upcoming Corporate Actions")
+    
+    # Add a debug section to show inquiry information
+    if st.checkbox("🔍 Debug: Show Inquiry Details"):
+        st.write("**Debug Information:**")
+        for i, event in enumerate(st.session_state.dashboard_events[:3]):  # Show first 3 for debugging
+            with st.expander(f"Debug Event {i}: {event.get('symbol', 'Unknown')}"):
+                st.write("**Event Data:**")
+                st.json(event)
+                
+                # Get user inquiry status using embedded data
+                user_status = get_user_inquiry_status(event, st.session_state.user_id)
+                
+                st.write("**User Inquiry Status:**")
+                st.json(user_status)
+    
+    for i, event in enumerate(st.session_state.dashboard_events[:10]):  # Show top 10
+        with st.expander(
+            f"🎯 **{event.get('symbol', 'Unknown')}** - {event.get('event_type', 'Unknown').replace('_', ' ').title()} "
+            f"({event.get('ex_date', event.get('effective_date', 'TBD'))})", 
+            expanded=i < 3
+        ):
+            # Event details
+            col1, col2 = st.columns([2, 1])
+            
+            with col1:
+                st.write(f"**Company:** {event.get('company_name', 'Unknown')}")
+                st.write(f"**Type:** {event.get('event_type', 'Unknown').replace('_', ' ').title()}")
+                st.write(f"**Status:** {event.get('status', 'Unknown').title()}")
+                st.write(f"**Description:** {event.get('description', 'No description available')}")
+                
+                # Show dates
+                if event.get('ex_date'):
+                    st.write(f"**Ex-Date:** {event.get('ex_date')}")
+                if event.get('amount'):
+                    st.write(f"**Amount:** {event.get('amount')}")
+                if event.get('ratio'):
+                    st.write(f"**Ratio:** {event.get('ratio')}")
+                    
+                # Debug: Show raw event inquiries if they exist
+                if event.get('inquiries'):
+                    st.write(f"**Raw Event Inquiries:** {len(event.get('inquiries', []))}")
+                    for inquiry in event.get('inquiries', []):
+                        st.write(f"  - {inquiry.get('subject', 'No subject')} ({inquiry.get('status', 'Unknown')}) - User: `{inquiry.get('user_id', 'Unknown')}`")
+            
+            with col2:
+                # Get user's inquiry status for this event using embedded data
+                user_status = get_user_inquiry_status(event, st.session_state.user_id)
+                
+                has_inquiries = user_status.get("has_inquiries", False)
+                open_inquiries_count = user_status.get("editable_count", 0)
+                total_inquiries_count = user_status.get("total_count", 0)
+                
+                # Debug: Show inquiry counts
+                st.write(f"**Debug:** Has inquiries: {has_inquiries}, Open: {open_inquiries_count}, Total: {total_inquiries_count}")
+                
+                # Show inquiry status
+                if has_inquiries:
+                    if open_inquiries_count > 0:
+                        st.info(f"📝 {open_inquiries_count} open, {total_inquiries_count} total inquiries")
+                    else:
+                        st.success(f"✅ {total_inquiries_count} closed inquiries")
+                else:
+                    st.success("✅ No inquiries yet")
+                
+                # Inquiry management buttons with smart enable/disable logic
+                st.markdown("**🔧 Inquiry Actions**")
+                
+                # Create three columns for the buttons
+                btn_col1, btn_col2, btn_col3 = st.columns(3)
+                
+                with btn_col1:
+                    # NEW button - disabled if user has open inquiries
+                    create_disabled = has_inquiries and open_inquiries_count > 0
+                    create_help = "You already have open inquiries for this event" if create_disabled else "Create new inquiry"
+                    
+                    if st.button("🆕", 
+                            key=f"create_{event.get('event_id', i)}", 
+                            help=create_help, 
+                            use_container_width=True,
+                            disabled=create_disabled):
+                        st.session_state.selected_event_for_inquiry = event
+                        st.session_state.inquiry_modal_type = 'create'
+                        st.rerun()
+                
+                with btn_col2:
+                    # VIEW button - always enabled
+                    if st.button("👁️", key=f"view_{event.get('event_id', i)}", 
+                            help="View all inquiries", use_container_width=True):
+                        st.session_state.selected_event_for_inquiry = event
+                        st.session_state.inquiry_modal_type = 'view'
+                        st.rerun()
+                
+                with btn_col3:
+                    # EDIT button - disabled if user has no open inquiries
+                    edit_disabled = not has_inquiries or open_inquiries_count == 0
+                    edit_help = "No editable inquiries found" if edit_disabled else f"Edit your {open_inquiries_count} open inquiries"
+
+                    if st.button("✏️", key=f"edit_{event.get('event_id', i)}", 
+                            help=edit_help, 
+                            use_container_width=True,
+                            disabled=edit_disabled):
+                        st.session_state.selected_event_for_inquiry = event
+                        st.session_state.inquiry_modal_type = 'edit'
+                        st.rerun()
+
+def show_inquiry_modal_create(event_data: Dict[str, Any]):
+    """Create inquiry using MCP tools directly"""
+    st.subheader(f"🆕 Create New Inquiry - {event_data.get('company_name', 'N/A')}")
+    
+    with st.form(f"create_inquiry_{event_data.get('event_id', 'unknown')}"):
+        st.info(f"**Event:** {event_data.get('description', 'N/A')}")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            subject = st.text_input("Subject", placeholder="Brief description of your inquiry")
+            priority = st.selectbox("Priority", ["LOW", "MEDIUM", "HIGH", "URGENT"], index=1)
+        
+        with col2:
+            st.text_input("Your Name", value=st.session_state.user_name, disabled=True)
+            st.text_input("Organization", value="Demo Organization", disabled=True)
+        
+        description = st.text_area("Detailed Description", height=100, 
+                                 placeholder="Provide detailed information about your inquiry...")
+        
+        col1, col2, col3 = st.columns([1, 1, 1])
+        with col1:
+            if st.form_submit_button("Create Inquiry", type="primary"):
+                if subject and description:
+                    with st.spinner("🔧 Creating inquiry via MCP tools..."):
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                        
+                        try:
+                            # Call create_inquiry_tool using MCP directly
+                            inquiry_response = loop.run_until_complete(
+                                agent_manager._execute_mcp_tool_direct(
+                                    server_url=MCP_SERVERS["rag"],
+                                    tool_name="create_inquiry_tool",
+                                    arguments={
+                                        "event_id": event_data.get('event_id'),
+                                        "user_id": st.session_state.user_id,
+                                        "user_name": st.session_state.user_name,
+                                        "organization": "Demo Organization",
+                                        "subject": subject,
+                                        "description": description,
+                                        "priority": priority
+                                    }
+                                )
+                            )
+                            
+                            # Parse the JSON response
+                            import json
+                            result = json.loads(inquiry_response)
+                            
+                            if result.get("success"):
+                                st.success("✅ Inquiry created successfully!")
+                                # Close modal and return to dashboard
+                                st.session_state.selected_event_for_inquiry = None
+                                if 'inquiry_modal_type' in st.session_state:
+                                    del st.session_state.inquiry_modal_type
+                                st.balloons()
+                                st.rerun()
+                            else:
+                                st.error(f"❌ Failed to create inquiry: {result.get('error', 'Unknown error')}")
+                                
+                        except Exception as e:
+                            st.error(f"❌ Error creating inquiry: {str(e)}")
+                        finally:
+                            loop.close()
+                else:
+                    st.error("Please fill in both subject and description")
+        
+        with col3:
+            if st.form_submit_button("Cancel"):
+                st.session_state.selected_event_for_inquiry = None
+                if 'inquiry_modal_type' in st.session_state:
+                    del st.session_state.inquiry_modal_type
+                st.rerun()
+
+def show_inquiry_modal_view(event_data: Dict[str, Any]):
+    """View inquiries using MCP tools directly"""
+    st.subheader(f"👁️ View Inquiries - {event_data.get('company_name', 'N/A')}")
+    
+    with st.spinner("🔧 Fetching inquiries via MCP tools..."):
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        try:
+            # Call get_inquiries_tool using MCP directly
+            inquiries_response = loop.run_until_complete(
+                agent_manager._execute_mcp_tool_direct(
+                    server_url=MCP_SERVERS["rag"],
+                    tool_name="get_inquiries_tool",
+                    arguments={"event_id": event_data.get('event_id')}
+                )
+            )
+            
+            # Parse the JSON response
+            import json
+            result = json.loads(inquiries_response)
+            inquiries = result.get("inquiries", [])
+            
+            if inquiries:
+                st.info(f"Found {len(inquiries)} inquiries for this corporate action")
+                
+                # Filter options
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    status_filter = st.selectbox("Filter by Status", 
+                                               ["All"] + ["OPEN", "ACKNOWLEDGED", "IN_REVIEW", "RESPONDED", "ESCALATED", "RESOLVED", "CLOSED"])
+                with col2:
+                    priority_filter = st.selectbox("Filter by Priority", 
+                                                 ["All"] + ["LOW", "MEDIUM", "HIGH", "URGENT"])
+                with col3:
+                    user_filter = st.selectbox("Filter by User", 
+                                             ["All"] + list(set([inq.get('user_name', 'Unknown') for inq in inquiries])))
+                
+                # Apply filters
+                filtered_inquiries = inquiries
+                if status_filter != "All":
+                    filtered_inquiries = [inq for inq in filtered_inquiries if inq.get('status') == status_filter]
+                if priority_filter != "All":
+                    filtered_inquiries = [inq for inq in filtered_inquiries if inq.get('priority') == priority_filter]
+                if user_filter != "All":
+                    filtered_inquiries = [inq for inq in filtered_inquiries if inq.get('user_name') == user_filter]
+                
+                st.markdown("---")
+                
+                # Display inquiries
+                for inquiry in filtered_inquiries:
+                    with st.container():
+                        # Color coding based on priority and status
+                        priority_color = {
+                            "LOW": "#28a745", 
+                            "MEDIUM": "#ffc107", 
+                            "HIGH": "#fd7e14", 
+                            "URGENT": "#dc3545"
+                        }.get(inquiry.get('priority', 'MEDIUM'), "#ffc107")
+                        
+                        status_color = {
+                            "OPEN": "#17a2b8",
+                            "ACKNOWLEDGED": "#6c757d", 
+                            "IN_REVIEW": "#007bff",
+                            "RESPONDED": "#28a745",
+                            "ESCALATED": "#dc3545",
+                            "RESOLVED": "#20c997",
+                            "CLOSED": "#6c757d"
+                        }.get(inquiry.get('status', 'OPEN'), "#17a2b8")
+                        
+                        st.markdown(f"""
+                        <div style="border-left: 4px solid {priority_color}; padding: 1rem; margin: 0.5rem 0; background: #f8f9fa; border-radius: 5px;">
+                            <h4>📋 {inquiry.get('subject', 'No Subject')}</h4>
+                            <p>
+                                <span style="background: {priority_color}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; font-weight: bold;">
+                                    {inquiry.get('priority', 'N/A')}
+                                </span>
+                                <span style="background: {status_color}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; font-weight: bold; margin-left: 0.5rem;">
+                                    {inquiry.get('status', 'N/A')}
+                                </span>
+                            </p>
+                            <p><strong>User:</strong> {inquiry.get('user_name', 'N/A')} ({inquiry.get('organization', 'N/A')})</p>
+                            <p><strong>Created:</strong> {inquiry.get('created_at', 'N/A')} | 
+                               <strong>Updated:</strong> {inquiry.get('updated_at', 'N/A')}</p>
+                            <p><strong>Description:</strong> {inquiry.get('description', 'N/A')}</p>
+                            {f"<p><strong>Response:</strong> {inquiry.get('response', '')}</p>" if inquiry.get('response') else ""}
+                            {f"<p><strong>Resolution Notes:</strong> {inquiry.get('resolution_notes', '')}</p>" if inquiry.get('resolution_notes') else ""}
+                        </div>
+                        """, unsafe_allow_html=True)
+            else:
+                st.info("No inquiries found for this corporate action")
+                
+        except Exception as e:
+            st.error(f"❌ Error fetching inquiries: {str(e)}")
+        finally:
+            loop.close()
+    
+    if st.button("Close View", type="primary"):
+        st.session_state.selected_event_for_inquiry = None
+        if 'inquiry_modal_type' in st.session_state:
+            del st.session_state.inquiry_modal_type
+        st.rerun()
+
+def show_inquiry_modal_edit(event_data: Dict[str, Any]):
+    """Edit inquiries using MCP tools directly"""
+    st.subheader(f"✏️ Edit Inquiries - {event_data.get('company_name', 'N/A')}")
+    
+    # Get user's inquiries for this event
+    with st.spinner("🔧 Loading your inquiries..."):
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        try:
+            # Call get_inquiries_tool and filter for user
+            inquiries_response = loop.run_until_complete(
+                agent_manager._execute_mcp_tool_direct(
+                    server_url=MCP_SERVERS["rag"],
+                    tool_name="get_inquiries_tool",
+                    arguments={"event_id": event_data.get('event_id')}
+                )
+            )
+            
+            # Parse and filter for user's inquiries
+            import json
+            result = json.loads(inquiries_response)
+            all_inquiries = result.get("inquiries", [])
+            user_inquiries = [inq for inq in all_inquiries if inq.get("user_id") == st.session_state.user_id]
+            
+        except Exception as e:
+            st.error(f"❌ Error loading inquiries: {str(e)}")
+            user_inquiries = []
+        finally:
+            loop.close()
+    
+    if user_inquiries:
+        st.info(f"You have {len(user_inquiries)} inquiries for this corporate action")
+        
+        # Select inquiry to edit
+        inquiry_options = {f"{inq['subject']} (ID: {inq['inquiry_id']})": inq for inq in user_inquiries}
+        selected_inquiry_key = st.selectbox("Select Inquiry to Edit", list(inquiry_options.keys()))
+        
+        if selected_inquiry_key:
+            selected_inquiry = inquiry_options[selected_inquiry_key]
+            
+            # Only allow editing if status is OPEN or ACKNOWLEDGED
+            if selected_inquiry.get('status') in ['OPEN', 'ACKNOWLEDGED']:
+                with st.form(f"edit_inquiry_{selected_inquiry['inquiry_id']}"):
+                    st.info(f"**Inquiry ID:** {selected_inquiry['inquiry_id']}")
+                    st.info(f"**Current Status:** {selected_inquiry.get('status', 'N/A')}")
+                    st.info(f"**Created:** {selected_inquiry.get('created_at', 'N/A')}")
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        new_subject = st.text_input("Subject", value=selected_inquiry.get('subject', ''))
+                        new_priority = st.selectbox("Priority", 
+                                                   ["LOW", "MEDIUM", "HIGH", "URGENT"],
+                                                   index=["LOW", "MEDIUM", "HIGH", "URGENT"].index(selected_inquiry.get('priority', 'MEDIUM')))
+                    
+                    with col2:
+                        st.text_input("Your Name", value=st.session_state.user_name, disabled=True)
+                        st.text_input("Organization", value="Demo Organization", disabled=True)
+                    
+                    new_description = st.text_area("Description", 
+                                                  value=selected_inquiry.get('description', ''),
+                                                  height=100)
+                    
+                    col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
+                    with col1:
+                        if st.form_submit_button("Update Inquiry", type="primary"):
+                            if new_subject and new_description:
+                                with st.spinner("🔧 Updating inquiry..."):
+                                    loop = asyncio.new_event_loop()
+                                    asyncio.set_event_loop(loop)
+                                    
+                                    try:
+                                        # Use direct MCP tool call to update inquiry
+                                        inquiry_response = loop.run_until_complete(
+                                            agent_manager._execute_mcp_tool_direct(
+                                                server_url=MCP_SERVERS["rag"],
+                                                tool_name="update_inquiry_tool",
+                                                arguments={
+                                                    "inquiry_id": selected_inquiry['inquiry_id'],
+                                                    "subject": new_subject,
+                                                    "description": new_description,
+                                                    "priority": new_priority
+                                                }
+                                            )
+                                        )
+                                        
+                                        # Parse the JSON response
+                                        import json
+                                        result = json.loads(inquiry_response)
+                                        
+                                        if result.get("success"):
+                                            st.success("✅ Inquiry updated successfully!")
+                                            
+                                            # Close modal and return to dashboard
+                                            st.session_state.selected_event_for_inquiry = None
+                                            if 'inquiry_modal_type' in st.session_state:
+                                                del st.session_state.inquiry_modal_type
+                                            st.balloons()
+                                            st.rerun()
+                                        else:
+                                            st.error(f"❌ Failed to update inquiry: {result.get('error', 'Unknown error')}")
+                                        
+                                    except Exception as e:
+                                        st.error(f"❌ Error updating inquiry: {str(e)}")
+                                    finally:
+                                        loop.close()
+                            else:
+                                st.error("Please fill in both subject and description")
+                    
+                    with col4:
+                        if st.form_submit_button("Cancel"):
+                            st.session_state.selected_event_for_inquiry = None
+                            if 'inquiry_modal_type' in st.session_state:
+                                del st.session_state.inquiry_modal_type
+                            st.rerun()
+            else:
+                st.warning(f"Cannot edit inquiry with status: {selected_inquiry.get('status')}. Only OPEN and ACKNOWLEDGED inquiries can be edited.")
+                
+                if st.button("Close"):
+                    st.session_state.selected_event_for_inquiry = None
+                    if 'inquiry_modal_type' in st.session_state:
+                        del st.session_state.inquiry_modal_type
+                    st.rerun()
+    else:
+        st.info("You have no inquiries for this corporate action yet.")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("Create First Inquiry"):
+                st.session_state.inquiry_modal_type = 'create'
+                st.rerun()
+        
+        with col2:
+            if st.button("Close"):
+                st.session_state.selected_event_for_inquiry = None
+                if 'inquiry_modal_type' in st.session_state:
+                    del st.session_state.inquiry_modal_type
+                st.rerun()
+
 # Custom CSS
 st.markdown("""
 <style>
@@ -817,253 +1521,375 @@ page = st.sidebar.selectbox(
 
 # Dashboard page
 if page == "🏠 Dashboard":
-    st.header("📊 Corporate Actions Overview")
-    
-    # Get real data from MCP servers or fallback to sample data
-    dashboard_data = []
-    data_source = "Sample Data"
-    
-    if st.session_state.agent_initialized:
-        # Fetch real corporate actions data via MCP tools
-        with st.spinner("🔄 Fetching live corporate actions data..."):
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-              # Try to get recent corporate actions data directly from MCP
-            try:
-                mcp_data = loop.run_until_complete(
-                    agent_manager._try_mcp_tools_first("Get recent corporate actions data for dashboard metrics and visualizations")
-                )
-                
-                if mcp_data:
-                    # Try to parse the MCP data properly
-                    import json
-                    parsed_events = []
-                    
-                    try:
-                        # First try to parse as complete JSON response
-                        if isinstance(mcp_data, str):
-                            try:
-                                mcp_json = json.loads(mcp_data)
-                                if isinstance(mcp_json, dict) and 'events' in mcp_json:
-                                    parsed_events = mcp_json['events']
-                                elif isinstance(mcp_json, list):
-                                    parsed_events = mcp_json
-                                else:
-                                    # Single event object
-                                    parsed_events = [mcp_json] if 'event_type' in mcp_json else []
-                            except json.JSONDecodeError:
-                                # If not valid JSON, try extracting JSON from text
-                                import re
-                                json_pattern = r'\{(?:[^{}]|{[^{}]*})*\}'
-                                json_matches = re.findall(json_pattern, mcp_data)
-                                
-                                for match in json_matches:
-                                    try:
-                                        event_data = json.loads(match)
-                                        if isinstance(event_data, dict):
-                                            if 'events' in event_data:
-                                                parsed_events.extend(event_data['events'])
-                                            elif 'event_type' in event_data or 'company_name' in event_data or 'issuer_name' in event_data:
-                                                parsed_events.append(event_data)
-                                    except:
-                                        continue
-                        elif isinstance(mcp_data, dict):
-                            if 'events' in mcp_data:
-                                parsed_events = mcp_data['events']
-                            elif 'event_type' in mcp_data:
-                                parsed_events = [mcp_data]
-                        elif isinstance(mcp_data, list):
-                            parsed_events = mcp_data
-                    except Exception as parse_error:
-                        st.warning(f"⚠️ MCP data parsing error: {parse_error}")
-                        parsed_events = []
-                    
-                    if parsed_events:
-                        # Apply normalization to ensure company_name field is present
-                        dashboard_data = normalize_event_data(parsed_events)
-                        data_source = "Live MCP Data"
-                        st.success(f"✅ Loaded {len(dashboard_data)} events from MCP servers")
-                        
-                        # Debug: Show a sample of the data structure
-                        if len(dashboard_data) > 0:
-                            st.expander("🔍 Debug: Sample Data Structure").write({
-                                "Sample Event": dashboard_data[0],
-                                "Company Name Field": dashboard_data[0].get('company_name', 'MISSING'),
-                                "Total Events": len(dashboard_data)
-                            })
-                    else:
-                        # Fallback: create synthetic data based on MCP response
-                        dashboard_data = get_enhanced_sample_events_from_mcp(mcp_data)
-                        data_source = "MCP-Enhanced Data"
-                        st.info(f"📊 Generated dashboard from MCP insights ({len(dashboard_data)} events)")
-                else:
-                    raise Exception("No MCP data received")
-                    
-            except Exception as e:
-                st.warning(f"⚠️ MCP data fetch failed: {str(e)}. Using sample data.")
-                dashboard_data = get_sample_events()
-                data_source = "Sample Data"
+        st.header("📊 Corporate Actions Dashboard")
+        
+        # Initialize session state for dashboard
+        if "user_subscriptions" not in st.session_state:
+            st.session_state.user_subscriptions = []
+        if "user_id" not in st.session_state:
+            st.session_state.user_id = "user_001"
+        if "user_name" not in st.session_state:
+            st.session_state.user_name = "Demo User"
+        if "subscriptions_loaded" not in st.session_state:
+            st.session_state.subscriptions_loaded = False
+        if "dashboard_data_loaded" not in st.session_state:
+            st.session_state.dashboard_data_loaded = False
+        if "dashboard_events" not in st.session_state:
+            st.session_state.dashboard_events = []
+        if "selected_event_for_inquiry" not in st.session_state:
+            st.session_state.selected_event_for_inquiry = None
+        if "inquiry_modal_type" not in st.session_state:
+            st.session_state.inquiry_modal_type = None
+        
+        # Synchronize agent initialization status
+        if st.session_state.agent_initialized and not agent_manager.is_initialized:
+            st.warning("🔄 Agent status out of sync. Please reinitialize the agent from the sidebar.")
+            st.session_state.agent_initialized = False
+        
+        # Handle inquiry modal display first
+        if st.session_state.selected_event_for_inquiry:
+            event_data = st.session_state.selected_event_for_inquiry
+            modal_type = st.session_state.get('inquiry_modal_type', 'create')
             
-            loop.close()
-    else:
-        dashboard_data = get_sample_events()
-        data_source = "Sample Data"
-    
-    # Show data source indicator
-    st.info(f"📊 **Data Source**: {data_source} | **Last Updated**: {datetime.now().strftime('%H:%M:%S')}")
-    
-    # Metrics row
-    col1, col2, col3, col4 = st.columns(4)    
-    with col1:
-        st.metric("📋 Total Events", len(dashboard_data))
-    with col2:
-        confirmed_count = len([e for e in dashboard_data if e.get("status") == "confirmed"])
-        st.metric("✅ Confirmed", confirmed_count)
-    with col3:
-        announced_count = len([e for e in dashboard_data if e.get("status") == "announced"])
-        st.metric("📅 Announced", announced_count)
-    with col4:
-        pending_count = len([e for e in dashboard_data if e.get("status") == "pending"])
-        st.metric("⏳ Pending", pending_count)
-    
-    # Convert to DataFrame for visualizations
-    if dashboard_data:
-        df = pd.DataFrame(dashboard_data)
-        
-        # Charts row
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            # Status distribution pie chart
-            st.subheader("📊 Status Distribution")
-            status_counts = df['status'].value_counts()
-            
-            fig_pie = px.pie(
-                values=status_counts.values,
-                names=status_counts.index,
-                title="Events by Status",
-                color_discrete_map={
-                    'confirmed': '#28a745',
-                    'announced': '#ffc107',
-                    'pending': '#dc3545',
-                    'processed': '#17a2b8',
-                    'cancelled': '#6c757d'
-                }
-            )
-            fig_pie.update_traces(textposition='inside', textinfo='percent+label')
-            st.plotly_chart(fig_pie, use_container_width=True)
-        
-        with col2:
-            # Event type distribution
-            st.subheader("🏢 Event Types")
-            type_counts = df['event_type'].value_counts()
-            
-            fig_bar = px.bar(
-                x=type_counts.index,
-                y=type_counts.values,
-                title="Events by Type",
-                color=type_counts.values,
-                color_continuous_scale="viridis"
-            )
-            fig_bar.update_layout(xaxis_title="Event Type", yaxis_title="Count")
-            st.plotly_chart(fig_bar, use_container_width=True)
-        
-        # Additional charts for richer dashboard
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            # Company activity chart
-            st.subheader("🏢 Most Active Companies")
-            company_counts = df['company_name'].value_counts().head(10)
-            
-            fig_company = px.bar(
-                x=company_counts.values,
-                y=company_counts.index,
-                orientation='h',
-                title="Top 10 Companies by Event Count",
-                color=company_counts.values,
-                color_continuous_scale="blues"
-            )
-            fig_company.update_layout(yaxis_title="Company", xaxis_title="Number of Events")
-            st.plotly_chart(fig_company, use_container_width=True)
-        
-        with col2:
-            # Timeline chart if we have date information
-            st.subheader("📅 Timeline Analysis")
-            if 'announcement_date' in df.columns:
-                df['announcement_date'] = pd.to_datetime(df['announcement_date'], errors='coerce')
-                timeline_data = df.groupby(df['announcement_date'].dt.date).size().reset_index(name='count')
-                
-                fig_timeline = px.line(
-                    timeline_data,
-                    x='announcement_date',
-                    y='count',
-                    title="Events Timeline",
-                    markers=True
-                )
-                fig_timeline.update_layout(xaxis_title="Date", yaxis_title="Number of Events")
-                st.plotly_chart(fig_timeline, use_container_width=True)
-            else:
-                # Alternative visualization if no date data
-                sector_data = df.get('sector', pd.Series(['Technology'] * len(df))).value_counts()
-                fig_sector = px.donut(
-                    values=sector_data.values,
-                    names=sector_data.index,
-                    title="Events by Sector"
-                )
-                st.plotly_chart(fig_sector, use_container_width=True)
-        
-        # Recent events table
-        st.subheader("📋 Recent Events")
-        
-        # Format DataFrame for display
-        display_columns = ['company_name', 'symbol', 'event_type', 'status']
-        if 'announcement_date' in df.columns:
-            display_columns.append('announcement_date')
-        
-        display_df = df[display_columns].copy()
-        display_df = display_df.rename(columns={
-            'company_name': 'Company',
-            'symbol': 'Symbol', 
-            'event_type': 'Event Type',
-            'status': 'Status',
-            'announcement_date': 'Announced'
-        })
-        
-        # Add row coloring based on status
-        def highlight_status(row):
-            if row['Status'] == 'confirmed':
-                return ['background-color: #d4edda'] * len(row)
-            elif row['Status'] == 'announced':
-                return ['background-color: #fff3cd'] * len(row)
-            elif row['Status'] == 'pending':
-                return ['background-color: #f8d7da'] * len(row)
-            else:
-                return [''] * len(row)
-        
-        styled_df = display_df.style.apply(highlight_status, axis=1)
-        st.dataframe(styled_df, use_container_width=True)
-        
-        # Summary insights
-        st.subheader("💡 Key Insights")
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            most_common_type = df['event_type'].mode()[0] if len(df) > 0 else "N/A"
-            st.metric("📈 Most Common Event", most_common_type)
-        
-        with col2:
-            most_active_company = df['company_name'].mode()[0] if len(df) > 0 else "N/A"
-            st.metric("🏢 Most Active Company", most_active_company)
-        
-        with col3:
-            completion_rate = (confirmed_count / len(df) * 100) if len(df) > 0 else 0
-            st.metric("✅ Completion Rate", f"{completion_rate:.1f}%")
-            
-    else:
-        st.warning("📭 No corporate actions data available")
-        st.info("💡 **Tip**: Initialize the Azure AI Agent to fetch live data from MCP servers")
+            if modal_type == 'create':
+                show_inquiry_modal_create(event_data)
+            elif modal_type == 'view':
+                show_inquiry_modal_view(event_data)
+            elif modal_type == 'edit':
+                show_inquiry_modal_edit(event_data)
+        else:
 
+            if not st.session_state.agent_initialized:
+                st.warning("⚠️ Please initialize the Azure AI Agent from the sidebar to access dashboard functionality.")
+                st.info("📊 Using sample data for demonstration")
+                show_sample_dashboard_overview()
+            else:
+                # Step 1: Load user subscriptions using MCP tools directly
+                if not st.session_state.subscriptions_loaded:
+                    with st.spinner("🤖 Retrieving your subscriptions from CosmosDB..."):
+                        try:
+                            # Use the agent manager's MCP tool execution method
+                            loop = asyncio.new_event_loop()
+                            asyncio.set_event_loop(loop)
+                            
+                            try:
+                                # Call get_subscription_tool using the MCP protocol
+                                subscription_response = loop.run_until_complete(
+                                    agent_manager._execute_mcp_tool_direct(
+                                        server_url=MCP_SERVERS["rag"],
+                                        tool_name="get_subscription_tool",
+                                        arguments={"user_id": st.session_state.user_id}
+                                    )
+                                )
+                                
+                                # Debug: Show the raw response
+                                #st.write("**Debug - Subscription Response:**")
+                                #st.text(subscription_response)
+                                
+                                # Parse the JSON response
+                                import json
+                                subscription_data = json.loads(subscription_response)
+                                
+                                # Extract subscription information
+                                subscription = subscription_data.get("subscription")
+                                if subscription and subscription.get("symbols"):
+                                    symbols = subscription.get("symbols", [])
+                                    if symbols:
+                                        st.session_state.user_subscriptions = symbols
+                                        st.success(f"✅ Found subscriptions: {', '.join(symbols)}")
+                                    else:
+                                        st.info("📝 No symbols found in subscription")
+                                        # Provide fallback option
+                                        if st.button("🔧 Use Test Subscriptions"):
+                                            st.session_state.user_subscriptions = ["AAPL", "MSFT", "TSLA"]
+                                            st.success("✅ Using test subscriptions: AAPL, MSFT, TSLA")
+                                else:
+                                    st.info("📝 No existing subscriptions found")
+                                    # Provide fallback option
+                                    if st.button("🔧 Use Test Subscriptions"):
+                                        st.session_state.user_subscriptions = ["AAPL", "MSFT", "TSLA"]
+                                        st.success("✅ Using test subscriptions: AAPL, MSFT, TSLA")
+                                        
+                            except json.JSONDecodeError as e:
+                                st.error(f"❌ JSON parsing error: {str(e)}")
+                                st.text(f"Raw response: {subscription_response}")
+                                # Provide fallback option
+                                if st.button("🔧 Use Test Subscriptions"):
+                                    st.session_state.user_subscriptions = ["AAPL", "MSFT", "TSLA"]
+                                    st.success("✅ Using test subscriptions: AAPL, MSFT, TSLA")
+                            except Exception as tool_error:
+                                st.error(f"❌ MCP Tool Error: {str(tool_error)}")
+                                # Provide fallback option
+                                if st.button("🔧 Use Test Subscriptions"):
+                                    st.session_state.user_subscriptions = ["AAPL", "MSFT", "TSLA"]
+                                    st.success("✅ Using test subscriptions: AAPL, MSFT, TSLA")
+                            finally:
+                                loop.close()
+                                
+                        except Exception as e:
+                            st.error(f"❌ Error loading subscriptions: {str(e)}")
+                            # Provide fallback option
+                            if st.button("🔧 Use Test Subscriptions"):
+                                st.session_state.user_subscriptions = ["AAPL", "MSFT", "TSLA"]
+                                st.success("✅ Using test subscriptions: AAPL, MSFT, TSLA")
+                        finally:
+                            st.session_state.subscriptions_loaded = True
+                
+                # Step 2: Load dashboard data (corporate actions) using MCP tools
+                if not st.session_state.dashboard_data_loaded and st.session_state.user_subscriptions:
+                    with st.spinner("🤖 Retrieving corporate actions data..."):
+                        try:
+                            # Use the agent manager's MCP tool execution method
+                            loop = asyncio.new_event_loop()
+                            asyncio.set_event_loop(loop)
+                            
+                            try:
+                                # Call get_upcoming_events_tool using the MCP protocol
+                                events_response = loop.run_until_complete(
+                                    agent_manager._execute_mcp_tool_direct(
+                                        server_url=MCP_SERVERS["rag"],
+                                        tool_name="get_upcoming_events_tool",
+                                        arguments={"user_id": st.session_state.user_id, "days_ahead": 30}
+                                    )
+                                )
+                                
+                                # Debug: Show the raw response
+                                #st.write("**Debug - Events Response:**")
+                                #st.text(events_response)
+                                
+                                # Parse the JSON response
+                                import json
+                                events_data = json.loads(events_response)
+                                
+                                # Extract events information
+                                upcoming_events = events_data.get("upcoming_events", [])
+                                if upcoming_events:
+                                    st.session_state.dashboard_events = upcoming_events
+                                    st.success(f"✅ Found {len(upcoming_events)} upcoming events")
+                                else:
+                                    st.info("📝 No upcoming events found, using sample data")
+                                    st.session_state.dashboard_events = get_sample_upcoming_events(st.session_state.user_subscriptions)
+                                    
+                            except json.JSONDecodeError as e:
+                                st.error(f"❌ JSON parsing error: {str(e)}")
+                                st.text(f"Raw response: {events_response}")
+                                st.session_state.dashboard_events = get_sample_upcoming_events(st.session_state.user_subscriptions)
+                            except Exception as tool_error:
+                                st.error(f"❌ MCP Tool Error: {str(tool_error)}")
+                                st.session_state.dashboard_events = get_sample_upcoming_events(st.session_state.user_subscriptions)
+                            finally:
+                                loop.close()
+                                
+                        except Exception as e:
+                            st.error(f"❌ Error loading events: {str(e)}")
+                            st.session_state.dashboard_events = get_sample_upcoming_events(st.session_state.user_subscriptions)
+                        finally:
+                            st.session_state.dashboard_data_loaded = True
+
+                # Subscription Management Section
+                st.markdown("---")
+                st.subheader("📈 My Subscriptions")
+                
+                # Show current subscriptions
+                if st.session_state.user_subscriptions:
+                    st.write("**Current Subscriptions:**")
+                    subscription_cols = st.columns(min(len(st.session_state.user_subscriptions), 5))
+                    for i, symbol in enumerate(st.session_state.user_subscriptions):
+                        with subscription_cols[i % 5]:
+                            if st.button(f"❌ {symbol}", key=f"unsub_{symbol}"):
+                                # Remove subscription using AI Agent
+                                with st.spinner(f"🤖 AI Agent removing {symbol}..."):
+                                    remaining_symbols = [s for s in st.session_state.user_subscriptions if s != symbol]
+                                    
+                                    loop = asyncio.new_event_loop()
+                                    asyncio.set_event_loop(loop)
+                                    
+                                    remove_request = f"""
+                                    Please update subscription for user ID {st.session_state.user_id}.
+                                    Remove {symbol} from subscription and save to CosmosDB.
+                                    New symbols list: {', '.join(remaining_symbols) if remaining_symbols else 'None'}
+                                    """
+                                    
+                                    try:
+                                        response = loop.run_until_complete(
+                                            agent_manager.send_message(remove_request)
+                                        )
+                                        if response.get("success"):
+                                            st.session_state.user_subscriptions = remaining_symbols
+                                            st.session_state.dashboard_data_loaded = False  # Refresh data
+                                            st.success(f"🤖 Removed {symbol}")
+                                            st.rerun()
+                                    except Exception as e:
+                                        st.error(f"❌ Error: {str(e)}")
+                                    finally:
+                                        loop.close()
+                else:
+                    st.info("📝 No subscriptions yet")
+                
+                # Add new subscription
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    new_symbols = st.text_input("Add Symbols", placeholder="AAPL,MSFT,GOOGL")
+                with col2:
+                    if st.button("➕ Subscribe"):
+                        if new_symbols:
+                            symbols = [s.strip().upper() for s in new_symbols.split(",") if s.strip()]
+                            
+                            with st.spinner("🤖 AI Agent saving subscription..."):
+                                all_symbols = list(set(st.session_state.user_subscriptions + symbols))
+                                
+                                loop = asyncio.new_event_loop()
+                                asyncio.set_event_loop(loop)
+                                
+                                save_request = f"""
+                                Please save subscription for user:
+                                - User ID: {st.session_state.user_id}
+                                - User Name: {st.session_state.user_name}
+                                - Symbols: {', '.join(all_symbols)}
+                                - Event Types: DIVIDEND,STOCK_SPLIT,MERGER,SPIN_OFF
+                                
+                                Save to CosmosDB using appropriate MCP tools.
+                                """
+                                
+                                try:
+                                    response = loop.run_until_complete(
+                                        agent_manager.send_message(save_request)
+                                    )
+                                    if response.get("success"):
+                                        st.session_state.user_subscriptions = all_symbols
+                                        st.session_state.dashboard_data_loaded = False  # Refresh data
+                                        st.success(f"✅ Subscribed to: {', '.join(symbols)}")
+                                        st.rerun()
+                                except Exception as e:
+                                    st.error(f"❌ Error: {str(e)}")
+                                finally:
+                                    loop.close()
+                
+                st.markdown("---")
+                
+                # Step 2: Get corporate actions for subscribed symbols using AI Agent
+                st.subheader("🗓️ Upcoming Corporate Actions (Next 7 Days)")
+                
+                if not st.session_state.dashboard_data_loaded:
+                    with st.spinner("🤖 AI Agent analyzing corporate actions for your subscriptions..."):
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                        
+                        if st.session_state.user_subscriptions:
+                            actions_request = f"""
+                            Please find upcoming corporate actions for user ID {st.session_state.user_id} for the next 7 days.
+                            
+                            User is subscribed to: {', '.join(st.session_state.user_subscriptions)}
+                            
+                            Tasks:
+                            1. Use vector search tools to find corporate actions for these symbols
+                            2. Filter for upcoming events (next 7 days)
+                            3. For each event, check for existing inquiries from CosmosDB
+                            4. Return structured data with event details and inquiry counts
+                            
+                            Focus on: dividends, stock splits, mergers, spin-offs for subscribed symbols.
+                            """
+                        else:
+                            actions_request = """
+                            Please show recent corporate actions examples to help user understand available events.
+                            
+                            Search for recent corporate actions (last 30 days) including:
+                            1. Dividend announcements
+                            2. Stock splits
+                            3. Merger activities
+                            4. Other corporate actions
+                            
+                            Show variety of companies to demonstrate subscription possibilities.
+                            """
+                        
+                        try:
+                            response = loop.run_until_complete(
+                                agent_manager.send_message(actions_request)
+                            )
+                            
+                            if response.get("success"):
+                                # Display AI Agent analysis
+                                st.markdown("### 🤖 AI Agent Analysis")
+                                st.markdown(response.get("answer", ""))
+                                
+                                # Try to extract structured data for display
+                                # This is simplified - in reality you'd parse more sophisticated response
+                                st.session_state.dashboard_events = extract_events_from_response(response.get("answer", ""))
+                                st.session_state.dashboard_data_loaded = True
+                                
+                            else:
+                                st.error(f"❌ AI Agent failed: {response.get('error')}")
+                                st.session_state.dashboard_events = get_sample_upcoming_events(st.session_state.user_subscriptions)
+                                
+                        except Exception as e:
+                            st.error(f"❌ Error: {str(e)}")
+                            st.session_state.dashboard_events = get_sample_upcoming_events(st.session_state.user_subscriptions)
+                        finally:
+                            loop.close()
+                
+                # Display dashboard metrics and events
+                show_dashboard_metrics_and_events()
+                
+                # Step 3: Inquiry Management Section
+                st.markdown("---")
+                st.subheader("❓ Inquiry Management")
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("🤖 Analyze My Inquiries", type="primary"):
+                        with st.spinner("🤖 AI Agent analyzing your inquiries..."):
+                            loop = asyncio.new_event_loop()
+                            asyncio.set_event_loop(loop)
+                            
+                            inquiry_request = f"""
+                            Please analyze all inquiries for user ID {st.session_state.user_id}.
+                            
+                            Use CosmosDB inquiry tools to:
+                            1. Count total open inquiries
+                            2. Identify high priority items
+                            3. Find inquiries needing attention
+                            4. Summarize inquiry status distribution
+                            """
+                            
+                            try:
+                                response = loop.run_until_complete(
+                                    agent_manager.send_message(inquiry_request)
+                                )
+                                if response.get("success"):
+                                    st.markdown("### 🤖 Inquiry Analysis")
+                                    st.markdown(response.get("answer", ""))
+                            except Exception as e:
+                                st.error(f"❌ Error: {str(e)}")
+                            finally:
+                                loop.close()
+                
+                with col2:
+                    if st.button("🔍 Find Events Needing Attention"):
+                        with st.spinner("🤖 AI Agent finding events needing attention..."):
+                            loop = asyncio.new_event_loop()
+                            asyncio.set_event_loop(loop)
+                            
+                            attention_request = f"""
+                            Please identify corporate actions needing attention for user ID {st.session_state.user_id}.
+                            
+                            Look for:
+                            1. Events with upcoming deadlines
+                            2. New announcements for subscribed symbols: {', '.join(st.session_state.user_subscriptions)}
+                            3. Events with unresolved inquiries
+                            4. High-priority items
+                            """
+                            
+                            try:
+                                response = loop.run_until_complete(
+                                    agent_manager.send_message(attention_request)
+                                )
+                                if response.get("success"):
+                                    st.markdown("### 🚨 Items Requiring Attention")
+                                    st.markdown(response.get("answer", ""))
+                            except Exception as e:
+                                st.error(f"❌ Error: {str(e)}")
+                            finally:
+                                loop.close()
 # Search Events page
 elif page == "🔍 Search Events":
     st.header("🔍 Advanced Event Search")
@@ -1605,14 +2431,10 @@ elif page == "⚙️ Settings":
     
     with col2:
         search_url = st.text_input("Search Server URL:", value=MCP_SERVERS["websearch"])
-    
-    with col3:
-        comments_url = st.text_input("Comments Server URL:", value=MCP_SERVERS["comments"])
-    
+        
     if st.button("🔄 Update MCP Configuration"):
         MCP_SERVERS["rag"] = rag_url
         MCP_SERVERS["websearch"] = search_url
-        MCP_SERVERS["comments"] = comments_url
         st.success("✅ MCP configuration updated! Please reinitialize the agent.")
     
     # System Status
